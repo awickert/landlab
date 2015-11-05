@@ -37,8 +37,8 @@ h[left_middle_node+ncols] = h_boundary
 mg['node'][ 'planet_surface__water_depth'] = h
 
 # Set initial topography
-x = mg.get_node_x_coords()
-y = mg.get_node_y_coords()
+x = mg.node_x
+y = mg.node_y
 zinit = mg.create_node_array_zeros()
 zinit = z0-initial_slope*x
 rightside = mg.right_edge_node_ids()

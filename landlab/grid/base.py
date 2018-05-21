@@ -3,257 +3,59 @@
 Python implementation of ModelGrid, a base class used to create and manage
 grids for 2D numerical models.
 
-Data Fields in ModelGrid
-------------------------
-:class:`~.ModelGrid` inherits from the :class:`~.ModelDataFields` class. This
-provides `~.ModelGrid`, and its subclasses, with the ability to, optionally,
-store data values that are associated with the different types grid elements
-(nodes, cells, etc.). In particular, as part of ``ModelGrid.__init__()``,
-data field *groups* are added to the `ModelGrid` that provide containers to
-put data fields into. There is one group for each of the eight grid elements
-(node, cell, link, face, core_node, core_cell, active_link, and active_face).
-
-To access these groups, use the same methods as accessing groups with
-`~.ModelDataFields`. ``ModelGrid.__init__()`` adds the following attributes to
-itself that provide access to the values groups:
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    ~landlab.grid.base.ModelGrid.at_node
-    ~landlab.grid.base.ModelGrid.at_cell
-    ~landlab.grid.base.ModelGrid.at_link
-    ~landlab.grid.base.ModelGrid.at_face
-    ~landlab.grid.base.ModelGrid.at_core_node
-    ~landlab.grid.base.ModelGrid.at_core_cell
-    ~landlab.grid.base.ModelGrid.at_active_link
-    ~landlab.grid.base.ModelGrid.at_active_face
-
-Each of these attributes returns a ``dict``-like object whose keys are value
-names as strings and values are numpy arrays that gives quantities at
-grid elements.
-
-
-Create Field Arrays
-+++++++++++++++++++
-:class:`~.ModelGrid` inherits several useful methods for creating new data
-fields and adding new data fields to a ModelGrid instance. Methods to add or
-create a new data array follow the ``numpy`` syntax for creating arrays. The
-folowing methods create and, optionally, initialize new arrays. These arrays
-are of the correct size but a new field will not be added to the field:
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    ~landlab.field.grouped.ModelDataFields.empty
-    ~landlab.field.grouped.ModelDataFields.ones
-    ~landlab.field.grouped.ModelDataFields.zeros
-
-Add Fields to a ModelGrid
-+++++++++++++++++++++++++
-Unlike with the equivalent numpy functions, these do not take a size argument
-as the size of the returned arrays is determined from the size of the
-ModelGrid. However, the keyword arguments are the same as those of the numpy
-equivalents.
-
-The following methods will create a new array and add a reference to that
-array to the ModelGrid:
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    ~landlab.field.grouped.ModelDataFields.add_empty
-    ~landlab.field.grouped.ModelDataFields.add_ones
-    ~landlab.field.grouped.ModelDataFields.add_zeros
-    ~landlab.field.grouped.ModelDataFields.add_field
-
-These methods operate in the same way as the previous set except that, in
-addition to creating a new array, the newly-created array is added to the
-ModelGrid. The calling signature is the same but with the addition of an
-argument that gives the name of the new field as a string. The additional
-method, :meth:`~.ModelDataFields.add_field`, adds a previously allocation
-array to the ModelGrid. If the array is of the incorrect size it will raise
-``ValueError``.
-
-Query Fields
-++++++++++++
-Use the following methods/attributes get information about the stored data
-fields:
-
-.. autosummary::
-    :toctree: generated/
-    :nosignatures:
-
-    ~landlab.field.grouped.ModelDataFields.size
-    ~landlab.field.grouped.ModelDataFields.keys
-    ~landlab.field.grouped.ModelDataFields.has_group
-    ~landlab.field.grouped.ModelDataFields.has_field
-    ~landlab.field.grouped.ModelDataFields.groups
-
-    i.e., call, e.g. mg.has_field('node', 'my_field_name')
-
-Notes
------
-It is important that when creating a new grid class that inherits from
-``ModelGrid``, to call ``ModelGrid.__init__()`` in the new grid's
-``__init__()``. For example, the new class's __init__ should contain the
-following code,
-
-.. code-block:: python
-
-    class NewGrid(ModelGrid):
-        def __init__(self, *args, **kwds):
-            ModelGrid.__init__(self, **kwds)
-            # Code that initializes the NewGrid
-
-Without this, the new grid class will not have the ``at_*`` attributes.
-
-Examples
---------
-Although the following examples use a :class:`~.RasterModelGrid`, they apply
-equally to any grid that inherits from :class:`~.ModelGrid`.  The new grid
-comes with a set of pre-defined value groups. One group for each grid element.
-Use the groups attribute to see the group names.
-
->>> from landlab import RasterModelGrid
->>> grid = RasterModelGrid(3, 3)
->>> groups = list(grid.groups)
->>> groups.sort()
->>> groups # doctest: +NORMALIZE_WHITESPACE
-['active_face', 'active_link', 'cell', 'core_cell', 'core_node', 'face',
- 'link', 'node']
-
-Create Field Arrays
-+++++++++++++++++++
-If you just want to create an array but not add it to the grid, you can use
-the :meth:`~.ModelGrid.ones` method.
-
->>> grid.ones(centering='node')
-array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])
->>> list(grid.at_node.keys()) # Nothing has been added to the grid
-[]
-
-Add Field Arrays
-++++++++++++++++
-Use the ``add_*`` methods to add value arrays attached to grid elements. Each
-of these methods accepts two arguments. The first is name of the grid element
-where values are associated and the second the name of the quantity. The
-quantity name must be unique within a group but the same quantity can appear
-in multiple goups.
-
->>> list(grid.at_node.keys()) # There a no values defined at grid nodes
-[]
->>> z = grid.add_ones('node', 'topographic__elevation')
-
-We now see that the array has been added to the grid as a reference to the
-array returned by ``add_ones``.
-
->>> list(grid.at_node.keys())
-['topographic__elevation']
->>> grid.at_node['topographic__elevation']
-array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])
->>> z is grid.at_node['topographic__elevation']
-True
-
-To add a previously created array to the grid, use the
-:meth:`~.ModelGrid.add_field` method but be aware that it must be of the
-correct size (if it's not a ``ValueError`` will be raised).
-
->>> grid.has_field('node', 'air__temperature')
-False
->>> import numpy as np
->>> t = np.zeros(9)
->>> t is grid.add_field('node', 'air__temperature', t)
-True
->>> grid.has_field('node', 'air__temperature')
-True
->>> grid.has_field('cell', 'air__temperature')
-False
->>> t is grid.at_node['air__temperature']
-True
+Do NOT add new documentation here. Grid documentation is now built in a semi-
+automated fashion. To modify the text seen on the web, edit the files
+`docs/text_for_[gridfile].py.txt`.
 """
 
 import numpy
 import numpy as np
 import warnings
+from time import time
 
 import six
 from six.moves import range
 
 from landlab.testing.decorators import track_this_method
 from landlab.utils import count_repeated_values
+from landlab.core.utils import argsort_points_by_x_then_y
 from landlab.utils.decorators import make_return_array_immutable, deprecated
-from landlab.field import ModelDataFields, ScalarDataFields
+from landlab.field import ModelDataFields, ModelDataFieldsMixIn
 from landlab.field.scalar_data_fields import FieldError
-from landlab.core.model_parameter_dictionary import MissingKeyError
 from . import grid_funcs as gfuncs
 from ..core.utils import as_id_array
 from ..core.utils import add_module_functions_to_class
 from .decorators import (override_array_setitem_and_reset, return_id_array,
                          return_readonly_id_array)
+from ..utils.decorators import cache_result_in_object
+from ..layers.eventlayers import EventLayersMixIn
+from .nodestatus import (CORE_NODE, FIXED_VALUE_BOUNDARY,
+                         FIXED_GRADIENT_BOUNDARY, LOOPED_BOUNDARY,
+                         CLOSED_BOUNDARY)
+from .linkstatus import ACTIVE_LINK, FIXED_LINK, INACTIVE_LINK
+from .linkstatus import set_status_at_link
 
 #: Indicates an index is, in some way, *bad*.
-BAD_INDEX_VALUE = numpy.iinfo(numpy.int32).max
+BAD_INDEX_VALUE = -1
 # DEJH thinks the user should be able to override this value if they want
 
 # Map names grid elements to the ModelGrid attribute that contains the count
 # of that element in the grid.
 _ARRAY_LENGTH_ATTRIBUTES = {
     'node': 'number_of_nodes',
-    'cell': 'number_of_cells',
+    'patch': 'number_of_patches',
     'link': 'number_of_links',
+    'corner': 'number_of_corners',
     'face': 'number_of_faces',
-    'core_node': 'number_of_core_nodes',
-    'core_cell': 'number_of_core_cells',
+    'cell': 'number_of_cells',
     'active_link': 'number_of_active_links',
     'active_face': 'number_of_active_faces',
+    'core_node': 'number_of_core_nodes',
+    'core_cell': 'number_of_core_cells',
 }
 
-# Define the boundary-type codes
-
-#: Indicates a node is *core*.
-CORE_NODE = 0
-
-#: Indicates a boundary node is has a fixed values.
-FIXED_VALUE_BOUNDARY = 1
-
-#: Indicates a boundary node is has a fixed gradient.
-FIXED_GRADIENT_BOUNDARY = 2
-
-#: Indicates a boundary node is wrap-around.
-TRACKS_CELL_BOUNDARY = 3
-
-#: Indicates a boundary node is closed
-CLOSED_BOUNDARY = 4
-
-# Define the link types
-
-#: Indicates a link is *active*, and can carry flux
-ACTIVE_LINK = 0
-
-#: Indicates a link has a fixed (gradient) value, & behaves as a boundary
-FIXED_LINK = 2
-
-#: Indicates a link is *inactive*, and cannot carry flux
-INACTIVE_LINK = 4
-
-BOUNDARY_STATUS_FLAGS_LIST = [
-    FIXED_VALUE_BOUNDARY,
-    FIXED_GRADIENT_BOUNDARY,
-    TRACKS_CELL_BOUNDARY,
-    CLOSED_BOUNDARY,
-]
-BOUNDARY_STATUS_FLAGS = set(BOUNDARY_STATUS_FLAGS_LIST)
-
-LINK_STATUS_FLAGS_LIST = [
-    ACTIVE_LINK,
-    FIXED_LINK,
-    INACTIVE_LINK,
-]
-LINK_STATUS_FLAGS = set(LINK_STATUS_FLAGS_LIST)
+# Fields whose sizes can not change.
+_SIZED_FIELDS = {'node', 'link', 'patch', 'corner', 'face', 'cell', }
 
 
 def _sort_points_into_quadrants(x, y, nodes):
@@ -275,8 +77,8 @@ def _sort_points_into_quadrants(x, y, nodes):
     Returns
     -------
     tuple of array_like
-        Tuple of nodes in each coordinate. Nodes are grouped as (*west*,
-        *east*, *north*, *south*).
+        Tuple of nodes in each coordinate. Nodes are grouped as
+        (*east*, *north*, *west*, *south*).
 
     Examples
     --------
@@ -286,7 +88,7 @@ def _sort_points_into_quadrants(x, y, nodes):
     >>> y = np.array([1, 0, -1, 0])
     >>> nodes = np.array([1, 2, 3, 4])
     >>> _sort_points_into_quadrants(x, y, nodes)
-    (array([4]), array([2]), array([1]), array([3]))
+    (array([2]), array([1]), array([4]), array([3]))
     """
     above_x_axis = y > 0
     right_of_y_axis = x > 0
@@ -297,7 +99,7 @@ def _sort_points_into_quadrants(x, y, nodes):
     east_nodes = nodes[right_of_y_axis & (~ closer_to_y_axis)]
     west_nodes = nodes[(~ right_of_y_axis) & (~ closer_to_y_axis)]
 
-    return (west_nodes, east_nodes, north_nodes, south_nodes)
+    return (east_nodes, north_nodes, west_nodes, south_nodes)
 
 
 def _default_axis_names(n_dims):
@@ -464,7 +266,7 @@ def find_true_vector_from_link_vector_pair(L1, L2, b1x, b1y, b2x, b2y):
     return ax, ay
 
 
-class ModelGrid(ModelDataFields):
+class ModelGrid(ModelDataFieldsMixIn, EventLayersMixIn):
     """Base class for 2D structured or unstructured grids for numerical models.
 
     The idea is to have at least two inherited
@@ -484,15 +286,8 @@ class ModelGrid(ModelDataFields):
         Values at links.
     at_face : dict-like
         Values at faces.
-    at_core_node : dict-like
-        Values at core nodes.
-    at_core_cell : dict-like
-        Values at core cells.
-    at_active_link : dict-like
-        Values at active links.
-    at_active_face : dict-like
-        Values at active faces.
-
+    at_grid: dict-like
+        Global values
     Other Parameters
     ----------------
     axis_name : tuple, optional
@@ -500,32 +295,29 @@ class ModelGrid(ModelDataFields):
     axis_units : tuple, optional
         Units of coordinates
     """
+    BC_NODE_IS_CORE = CORE_NODE
+    BC_NODE_IS_FIXED_VALUE = FIXED_VALUE_BOUNDARY
+    BC_NODE_IS_FIXED_GRADIENT = FIXED_GRADIENT_BOUNDARY
+    BC_NODE_IS_LOOPED = LOOPED_BOUNDARY
+    BC_NODE_IS_CLOSED = CLOSED_BOUNDARY
+
+    BC_LINK_IS_ACTIVE = ACTIVE_LINK
+    BC_LINK_IS_FIXED = FIXED_LINK
+    BC_LINK_IS_INACTIVE = INACTIVE_LINK
+
     # Debugging flags (if True, activates some output statements)
     _DEBUG_VERBOSE = False
     _DEBUG_TRACK_METHODS = False
 
     at_node = {}  # : Values defined at nodes
-    at_cell = {}  # : Values defined at cells
     at_link = {}  # : Values defined at links
+    at_patch = {}  # : Values defined at patches
+    at_corner = {}  # : Values defined at corners
     at_face = {}  # : Values defined at faces
-    at_core_node = {}  # : Values defined at core nodes
-    at_core_cell = {}  # : Values defined at core cells
-    at_active_link = {}  # : Values defined at active links
-    at_active_face = {}  # : Values defined at active faces
-
-    # : Nodes on the other end of links pointing into a node.
-    node_inlink_matrix = numpy.array([], dtype=numpy.int32)
-    # : Nodes on the other end of links pointing out of a node.
-    node_outlink_matrix = numpy.array([], dtype=numpy.int32)
+    at_cell = {}  # : Values defined at cells
 
     def __init__(self, **kwds):
         super(ModelGrid, self).__init__()
-        for element_name in _ARRAY_LENGTH_ATTRIBUTES:
-            array_length = self.number_of_elements(element_name)
-            try:
-                self.new_field_location(element_name, array_length)
-            except AttributeError:
-                pass
 
         self.axis_name = kwds.get('axis_name', _default_axis_names(self.ndim))
         self.axis_units = kwds.get(
@@ -534,35 +326,379 @@ class ModelGrid(ModelDataFields):
         self._link_length = None
         self._all_node_distances_map = None
         self._all_node_azimuths_map = None
-        self._node_unit_vector_sum_x = None
-        self._node_unit_vector_sum_y = None
-        self._link_unit_vec_x = None
-        self._link_unit_vec_y = None
+        self.bc_set_code = 0
+
+        # Sort links according to the x and y coordinates of their midpoints.
+        # Assumes 1) node_at_link_tail and node_at_link_head have been
+        # created, and 2) so have node_x and node_y.
+        # self._sort_links_by_midpoint()
+
+        for loc in _SIZED_FIELDS:
+            size = self.number_of_elements(loc)
+            ModelDataFields.new_field_location(self, loc, size=size)
+        ModelDataFields.new_field_location(self, 'grid', size=1)
+        # for loc in _UNSIZED_FIELDS:
+        #     ModelDataFields.new_field_location(self, loc, size=None)
+        ModelDataFields.set_default_group(self, 'node')
+
+    def _create_neighbor_list(self, **kwds):
+        """Create list of neighbor node IDs.
+
+        Creates a list of IDs of neighbor nodes for each node, as a
+        2D array. Only record neighbor nodes that are on the other end of an
+        *active* link. Nodes attached to *inactive* links or neighbor nodes
+        that would be outside of the grid are given an ID of
+        :const:`~landlab.grid.base.BAD_INDEX_VALUE`.
+
+        Neighbors are ordered as [*right*, *top*, *left*, *bottom*].
+        """
+        self._active_neighbor_nodes = self.adjacent_nodes_at_node.copy()
+        self._active_neighbor_nodes[
+            self.active_link_dirs_at_node == 0] = BAD_INDEX_VALUE
+        self.neighbor_list_created = True
+        return self._active_neighbor_nodes
+
+    @classmethod
+    def from_file(cls, file_like):
+        params = load_params(file_like)
+        return cls.from_dict(params)
+
+    @classmethod
+    def from_dict(cls, params):
+        raise NotImplementedError('from_dict')
 
     def _initialize(self):
         raise NotImplementedError('_initialize')
 
     @property
     def ndim(self):
-        """Number of spatial dimensions of the grid"""
+        """Number of spatial dimensions of the grid.
+
+        LLCATS: GINF
+        """
         return 2
 
+    def _setup_nodes(self):
+        """Set up the node id array."""
+        self._nodes = np.arange(self.number_of_nodes, dtype=int)
+        return self._nodes
+
     @property
-    @override_array_setitem_and_reset('update_links_nodes_cells_to_new_BCs')
+    @make_return_array_immutable
+    def nodes(self):
+        """Get node ids for the grid.
+
+        Examples
+        --------
+        >>> from landlab import RadialModelGrid
+        >>> mg = RadialModelGrid(num_shells=1)
+        >>> mg.nodes
+        array([0, 1, 2, 3, 4, 5, 6])
+
+        LLCATS: NINF
+        """
+        try:
+            return self._nodes
+        except AttributeError:
+            return self._setup_nodes()
+
+    @property
+    @override_array_setitem_and_reset('reset_status_at_node')
     def status_at_node(self):
-        """Get array of the boundary status for each node."""
+        """Get array of the boundary status for each node.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid
+        >>> from landlab import FIXED_GRADIENT_BOUNDARY, FIXED_LINK
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.status_at_node.reshape((4, 5))
+        array([[1, 1, 1, 1, 1],
+               [1, 0, 0, 0, 1],
+               [1, 0, 0, 0, 1],
+               [1, 1, 1, 1, 1]], dtype=uint8)
+        >>> np.any(mg.status_at_link == FIXED_LINK)
+        False
+
+        >>> mg.status_at_node[mg.nodes_at_left_edge] = FIXED_GRADIENT_BOUNDARY
+        >>> mg.status_at_node.reshape((4, 5))
+        array([[2, 1, 1, 1, 1],
+               [2, 0, 0, 0, 1],
+               [2, 0, 0, 0, 1],
+               [2, 1, 1, 1, 1]], dtype=uint8)
+        >>> np.any(mg.status_at_link == FIXED_LINK)  # links auto-update
+        True
+
+        LLCATS: NINF BC
+        """
         return self._node_status
 
     @status_at_node.setter
     def status_at_node(self, new_status):
         """Set the array of node boundary statuses."""
         self._node_status[:] = new_status[:]
-        self.update_links_nodes_cells_to_new_BCs()
+        self.reset_status_at_node()
+
+    @property
+    @deprecated(use='adjacent_nodes_at_node', version=1.2)
+    @make_return_array_immutable
+    def neighbors_at_node(self):
+        """Get neighboring nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, BAD_INDEX_VALUE
+        >>> grid = RasterModelGrid((4, 3))
+        >>> neighbors = grid.adjacent_nodes_at_node.copy()
+        >>> neighbors[neighbors == BAD_INDEX_VALUE] = -1
+        >>> neighbors # doctest: +NORMALIZE_WHITESPACE
+        array([[ 1,  3, -1, -1], [ 2,  4,  0, -1], [-1,  5,  1, -1],
+               [ 4,  6, -1,  0], [ 5,  7,  3,  1], [-1,  8,  4,  2],
+               [ 7,  9, -1,  3], [ 8, 10,  6,  4], [-1, 11,  7,  5],
+               [10, -1, -1,  6], [11, -1,  9,  7], [-1, -1, 10,  8]])
+
+        LLCATS: NINF CONN
+        """
+        return self.adjacent_nodes_at_node
+
+    @property
+    @cache_result_in_object()
+    @make_return_array_immutable
+    def adjacent_nodes_at_node(self):
+        """Get adjacent nodes.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid
+        >>> grid = HexModelGrid(3, 3)
+        >>> grid.adjacent_nodes_at_node
+        array([[ 1,  4,  3, -1, -1, -1],
+               [ 2,  5,  4,  0, -1, -1],
+               [ 6,  5,  1, -1, -1, -1],
+               [ 4,  7,  0, -1, -1, -1],
+               [ 5,  8,  7,  3,  0,  1],
+               [ 6,  9,  8,  4,  1,  2],
+               [ 9,  5,  2, -1, -1, -1],
+               [ 8,  3,  4, -1, -1, -1],
+               [ 9,  7,  4,  5, -1, -1],
+               [ 8,  5,  6, -1, -1, -1]])
+
+        LLCATS: NINF CONN
+        """
+        node_is_at_tail = np.choose(self.link_dirs_at_node + 1,
+                                    np.array((1, -1, 0), dtype=np.int8))
+        out = self.nodes_at_link[self.links_at_node, node_is_at_tail]
+        out[node_is_at_tail == -1] = -1
+
+        return out
+
+    @property
+    @cache_result_in_object()
+    @return_readonly_id_array
+    def active_adjacent_nodes_at_node(self):
+        """Adjacent nodes for each grid node.
+
+        For each grid node, get the adjacent nodes ordered
+        counterclockwise starting from the positive x axis.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, HexModelGrid
+        >>> grid = RasterModelGrid((4, 5))
+
+        >>> grid.active_adjacent_nodes_at_node[(-1, 6, 2), ]
+        array([[-1, -1, -1, -1],
+               [ 7, 11,  5,  1],
+               [-1,  7, -1, -1]])
+
+        Setting a node to closed causes all links touching it to
+        be inactive.
+
+        >>> grid.status_at_node[6] = grid.BC_NODE_IS_CLOSED
+        >>> grid.active_adjacent_nodes_at_node[(-1, 6, 2), ]
+        array([[-1, -1, -1, -1],
+               [-1, -1, -1, -1],
+               [-1,  7, -1, -1]])
+
+        >>> grid.active_adjacent_nodes_at_node[7]
+        array([ 8, 12, -1,  2])
+        >>> grid.active_adjacent_nodes_at_node[2]
+        array([-1,  7, -1, -1])
+
+        >>> grid = HexModelGrid(3, 2)
+        >>> grid.status_at_node[0] = grid.BC_NODE_IS_CLOSED
+        >>> grid.active_adjacent_nodes_at_node
+        array([[-1, -1, -1, -1, -1, -1],
+               [-1,  3, -1, -1, -1, -1],
+               [ 3, -1, -1, -1, -1, -1],
+               [ 4,  6,  5,  2, -1,  1],
+               [-1,  3, -1, -1, -1, -1],
+               [-1, -1,  3, -1, -1, -1],
+               [-1,  3, -1, -1, -1, -1]])
+
+        LLCATS: NINF CONN BC
+        """
+        return np.choose(
+            self.status_at_link[self.links_at_node] == ACTIVE_LINK,
+            (-1, self.adjacent_nodes_at_node))
+
+    @property
+    @deprecated(use='active_adjacent_nodes_at_node', version=1.2)
+    @cache_result_in_object()
+    @return_readonly_id_array
+    def active_neighbors_at_node(self):
+        """Get list of neighbor node IDs.
+
+        Return lists of neighbor nodes, where the neighbor is connected by an
+        active link. For each node, the list gives neighbor ids as [right, top,
+        left, bottom]. Nodes at the end of inactive links or nodes in missing
+        positions get BAD_INDEX_VALUE.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, HexModelGrid
+        >>> grid = RasterModelGrid((4, 5))
+
+        >>> grid.active_adjacent_nodes_at_node[(-1, 6, 2), ]
+        array([[-1, -1, -1, -1],
+               [ 7, 11,  5,  1],
+               [-1,  7, -1, -1]])
+
+        Setting a node to closed causes all links touching it to
+        be inactive.
+
+        >>> grid.status_at_node[6] = grid.BC_NODE_IS_CLOSED
+        >>> grid.active_adjacent_nodes_at_node[(-1, 6, 2), ]
+        array([[-1, -1, -1, -1],
+               [-1, -1, -1, -1],
+               [-1,  7, -1, -1]])
+
+        >>> grid.active_adjacent_nodes_at_node[7]
+        array([ 8, 12, -1,  2])
+        >>> grid.active_adjacent_nodes_at_node[2]
+        array([-1,  7, -1, -1])
+
+        >>> grid = HexModelGrid(3, 2)
+        >>> grid.status_at_node[0] = grid.BC_NODE_IS_CLOSED
+        >>> grid.active_adjacent_nodes_at_node
+        array([[-1, -1, -1, -1, -1, -1],
+               [-1,  3, -1, -1, -1, -1],
+               [ 3, -1, -1, -1, -1, -1],
+               [ 4,  6,  5,  2, -1,  1],
+               [-1,  3, -1, -1, -1, -1],
+               [-1, -1,  3, -1, -1, -1],
+               [-1,  3, -1, -1, -1, -1]])
+
+        LLCATS: NINF CONN BC
+        """
+        return self.active_adjacent_nodes_at_node
+
+    @property
+    @make_return_array_immutable
+    def links_at_node(self):
+        """Get links of nodes.
+
+        Returns
+        -------
+        (NODES, LINKS) ndarray of int
+            Link for the nodes of a grid. The shape of the matrix will be
+            number of nodes rows by max number of links per node. Order is
+            anticlockwise from east.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 3))
+        >>> grid.links_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([[ 0,  2, -1, -1], [ 1,  3,  0, -1], [-1,  4,  1, -1],
+               [ 5,  7, -1,  2], [ 6,  8,  5,  3], [-1,  9,  6,  4],
+               [10, 12, -1,  7], [11, 13, 10,  8], [-1, 14, 11,  9],
+               [15, -1, -1, 12], [16, -1, 15, 13], [-1, -1, 16, 14]])
+        >>> grid.links_at_node[4]
+        array([6, 8, 5, 3])
+        >>> grid.links_at_node[(4, 7), :]
+        array([[ 6,  8,  5,  3], [11, 13, 10, 8]])
+
+        LLCATS: NINF LINF CONN
+        """
+        return self._links_at_node
+
+    @property
+    @make_return_array_immutable
+    def link_dirs_at_node(self):
+        """Link directions at each node: 1=incoming, -1=outgoing, 0=none.
+
+        Returns
+        -------
+        (NODES, LINKS) ndarray of int
+            Link directions relative to the nodes of a grid. The shape of the
+            matrix will be number of nodes rows by max number of links per
+            node. A zero indicates no link at this position.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 3))
+        >>> grid.link_dirs_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([[-1, -1,  0,  0], [-1, -1,  1,  0], [ 0, -1,  1,  0],
+               [-1, -1,  0,  1], [-1, -1,  1,  1], [ 0, -1,  1,  1],
+               [-1, -1,  0,  1], [-1, -1,  1,  1], [ 0, -1,  1,  1],
+               [-1,  0,  0,  1], [-1,  0,  1,  1], [ 0,  0,  1,  1]],
+               dtype=int8)
+        >>> grid.link_dirs_at_node[4]
+        array([-1, -1,  1,  1], dtype=int8)
+        >>> grid.link_dirs_at_node[(4, 7), :]
+        array([[-1, -1,  1,  1],
+               [-1, -1,  1,  1]], dtype=int8)
+
+        LLCATS: NINF LINF CONN
+        """
+        return self._link_dirs_at_node
+
+    @property
+    @make_return_array_immutable
+    @cache_result_in_object()
+    def active_link_dirs_at_node(self):
+        """
+        Link flux directions at each node: 1=incoming flux, -1=outgoing
+        flux, 0=no flux. Note that inactive links receive zero, but active
+        and fixed links are both reported normally.
+
+        Returns
+        -------
+        (NODES, LINKS) ndarray of int
+            Link directions relative to the nodes of a grid. The shape of the
+            matrix will be number of nodes rows by max number of links per
+            node. A zero indicates no link at this position.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> grid = RasterModelGrid((4, 3))
+        >>> grid.status_at_node[grid.nodes_at_left_edge] = CLOSED_BOUNDARY
+        >>> grid.active_link_dirs_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([[ 0,  0,  0,  0], [ 0, -1,  0,  0], [ 0,  0,  0,  0],
+               [ 0,  0,  0,  0], [-1, -1,  0,  1], [ 0,  0,  1,  0],
+               [ 0,  0,  0,  0], [-1, -1,  0,  1], [ 0,  0,  1,  0],
+               [ 0,  0,  0,  0], [ 0,  0,  0,  1], [ 0,  0,  0,  0]],
+               dtype=int8)
+
+        LLCATS: NINF LINF CONN
+        """
+        return np.choose(self.link_status_at_node == ACTIVE_LINK,
+                         (0, self.link_dirs_at_node))
+
+    @property
+    @make_return_array_immutable
+    @cache_result_in_object()
+    def link_status_at_node(self):
+        return self.status_at_link[self.links_at_node]
 
     @property
     def node_at_cell(self):
         """Node ID associated with grid cells.
-        
+
         Examples
         --------
         >>> from landlab import RasterModelGrid, BAD_INDEX_VALUE
@@ -570,6 +706,8 @@ class ModelGrid(ModelDataFields):
         >>> grid.node_at_cell # doctest: +NORMALIZE_WHITESPACE
         array([ 6,  7,  8,
                11, 12, 13])
+
+        LLCATS: NINF CINF CONN
         """
         return self._node_at_cell
 
@@ -588,34 +726,42 @@ class ModelGrid(ModelDataFields):
                -1,  0,  1,  2, -1,
                -1,  3,  4,  5, -1,
                -1, -1, -1, -1, -1])
+
+        LLCATS: CINF NINF CONN
         """
         return self._cell_at_node
 
     @property
     @return_readonly_id_array
-    def active_nodes(self):
-        """Get array of active nodes.
-
-        Node IDs of all active (core & open boundary) nodes.
-        core_nodes will return just core nodes.
-        """
-        (active_node_ids, ) = numpy.where(self._node_status != CLOSED_BOUNDARY)
-        return active_node_ids
-
-    @property
-    @return_readonly_id_array
+    @cache_result_in_object()
     def core_nodes(self):
-        """Get array of core nodes."""
-        try:
-            return self._core_nodes
-        except AttributeError:
-            (core_node_ids, ) = numpy.where(self._node_status == CORE_NODE)
-            return core_node_ids
+        """Get array of core nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.core_nodes
+        array([ 6,  7,  8, 11, 12, 13])
+
+        LLCATS: NINF BC
+        """
+        return numpy.where(self.status_at_node == CORE_NODE)[0]
 
     @property
     @return_readonly_id_array
     def boundary_nodes(self):
-        """Get array of boundary nodes."""
+        """Get array of boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.boundary_nodes
+        array([ 0,  1,  2,  3,  4,  5,  9, 10, 14, 15, 16, 17, 18, 19])
+
+        LLCATS: NINF BC
+        """
         try:
             return self._boundary_nodes
         except:
@@ -625,7 +771,20 @@ class ModelGrid(ModelDataFields):
     @property
     @return_readonly_id_array
     def open_boundary_nodes(self):
-        """Get array of open boundary nodes."""
+        """Get array of open boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> for edge in (mg.nodes_at_left_edge, mg.nodes_at_right_edge,
+        ...              mg.nodes_at_bottom_edge):
+        ...     mg.status_at_node[edge] = CLOSED_BOUNDARY
+        >>> mg.open_boundary_nodes
+        array([16, 17, 18])
+
+        LLCATS: NINF BC
+        """
         (open_boundary_node_ids, ) = numpy.where(
             (self._node_status != CLOSED_BOUNDARY) &
             (self._node_status != CORE_NODE))
@@ -634,7 +793,18 @@ class ModelGrid(ModelDataFields):
     @property
     @return_readonly_id_array
     def closed_boundary_nodes(self):
-        """Get array of closed boundary nodes."""
+        """Get array of closed boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = CLOSED_BOUNDARY
+        >>> mg.closed_boundary_nodes
+        array([15, 16, 17, 18, 19])
+
+        LLCATS: NINF BC
+        """
         (closed_boundary_node_ids, ) = numpy.where(
             self._node_status == CLOSED_BOUNDARY)
         return closed_boundary_node_ids
@@ -642,184 +812,855 @@ class ModelGrid(ModelDataFields):
     @property
     @return_readonly_id_array
     def fixed_gradient_boundary_nodes(self):
-        """Get array of fixed gradient boundary nodes."""
+        """Get array of fixed gradient boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, FIXED_GRADIENT_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = FIXED_GRADIENT_BOUNDARY
+        >>> mg.fixed_gradient_boundary_nodes
+        array([15, 16, 17, 18, 19])
+
+        LLCATS: NINF BC
+        """
         (fixed_gradient_boundary_node_ids, ) = numpy.where(
             self._node_status == FIXED_GRADIENT_BOUNDARY)
         return fixed_gradient_boundary_node_ids
 
     @property
     @return_readonly_id_array
-    def fixed_value_boundary_nodes(self):
-        """Get array of fixed value boundary nodes."""
-        (fixed_value_boundary_node_ids, ) = numpy.where(
-            self._node_status == FIXED_VALUE_BOUNDARY)
-        return fixed_value_boundary_node_ids
+    def fixed_gradient_boundary_node_fixed_link(self):
+        """
+        An array of the fixed_links connected to fixed gradient boundary nodes.
 
-    @property
-    def active_links(self):
-        """Get array of active links."""
-        try:
-            return self.active_link_ids
-        except AttributeError:
-            self._reset_link_status_list()
-            return self.active_link_ids
+        Note that on a raster, some nodes (notably the corners) can be
+        FIXED_GRADIENT_BOUNDARY, but not have a true FIXED_LINK neighboring
+        link. In such cases, the link returned will be a closed link joining
+        the corner node to a neighboring FIXED_GRADIENT_BOUNDARY node (see
+        example).
 
-    @property
-    def fixed_links(self):
-        """Get array of fixed links."""
+        An AssertionError will be raised if for some reason a
+        FIXED_GRADIENT_BOUNDARY node exists which has neither a
+        FIXED_GRADIENT_BOUNDARY neighbor, or a FIXED_LINK.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> from landlab import FIXED_GRADIENT_BOUNDARY
+        >>> grid = RasterModelGrid((3, 4))
+        >>> leftedge = grid.nodes_at_left_edge
+        >>> grid.status_at_node[leftedge] = FIXED_GRADIENT_BOUNDARY
+        >>> grid.fixed_gradient_boundary_nodes
+        array([0, 4, 8])
+        >>> grid.fixed_gradient_boundary_node_fixed_link
+        array([ 3,  7, 10])
+        """
         try:
-            return self.fixed_link_ids
+            return self._fixed_gradient_boundary_node_links
         except AttributeError:
-            self._reset_link_status_list()
-            return self.fixed_link_ids
+            self._create_fixed_gradient_boundary_node_links()
+            return self._fixed_gradient_boundary_node_links
 
     @property
     @return_readonly_id_array
-    def node_at_core_cell(self):
-        """Get array of nodes associated with core cells."""
-        (core_cell_ids, ) = numpy.where(self._node_status == CORE_NODE)
-        return core_cell_ids
+    def fixed_gradient_boundary_node_anchor_node(self):
+        """
+        Returns the node at the other end of the fixed link for a fixed
+        gradient boundary node.
+
+        Degenerate FIXED_GRADIENT_BOUNDARY nodes (e.g., corners) are handled as
+        in :func:`fixed_gradient_boundary_node_fixed_link`, by pointing to a
+        neighboring FIXED_GRADIENT_BOUNDARY node.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> from landlab import FIXED_GRADIENT_BOUNDARY
+        >>> grid = RasterModelGrid((3, 4))
+        >>> leftedge = grid.nodes_at_left_edge
+        >>> grid.status_at_node[leftedge] = FIXED_GRADIENT_BOUNDARY
+        >>> grid.fixed_gradient_boundary_nodes
+        array([0, 4, 8])
+        >>> grid.fixed_gradient_boundary_node_fixed_link
+        array([ 3,  7, 10])
+        >>> grid.fixed_gradient_boundary_node_anchor_node
+        array([4, 5, 4])
+        """
+        try:
+            return self._fixed_gradient_boundary_node_anchor_node
+        except AttributeError:
+            self._create_fixed_gradient_boundary_node_anchor_node()
+            return self._fixed_gradient_boundary_node_anchor_node
+
+    def _create_fixed_gradient_boundary_node_links(self):
+        """
+        Builds a data structure to hold the fixed_links which control the
+        values of any FIXED_GRADIENT_BOUNDARY nodes in the grid.
+
+        An AssertionError will be raised if for some reason a
+        FIXED_GRADIENT_BOUNDARY node exists which has neither a
+        FIXED_GRADIENT_BOUNDARY neighbor, or a FIXED_LINK.
+        """
+        self._fixed_grad_links_created = True
+        self._fixed_gradient_boundary_node_links = np.empty_like(
+            self.fixed_gradient_boundary_nodes, dtype=int)
+        fix_nodes = self.fixed_gradient_boundary_nodes
+        neighbor_links = self.links_at_node[fix_nodes]  # -1s
+        boundary_exists = self.link_dirs_at_node[fix_nodes]
+        # next line retains -1 indexes
+        link_stat_badind = self.status_at_link[neighbor_links] == FIXED_LINK
+        true_connection = np.logical_and(link_stat_badind, boundary_exists)
+        true_fix_nodes = true_connection.sum(axis=1).astype(bool)
+        self._fixed_gradient_boundary_node_links[true_fix_nodes] = (
+            neighbor_links[true_connection])
+        # resolve any corner nodes
+        neighbor_nodes = self.adjacent_nodes_at_node[fix_nodes]  # BAD_INDEX_VALUEs
+        neighbor_nodes[neighbor_nodes == BAD_INDEX_VALUE] = -1
+        fixed_grad_neighbor = np.logical_and((self.status_at_node[
+            neighbor_nodes] == FIXED_GRADIENT_BOUNDARY), boundary_exists)
+        # ^True when FIXED_GRADIENT_BOUNDARY for real
+        # winnow it down to only one possibility for fixed_grad neighbor:
+        which_neighbor = np.argmax(fixed_grad_neighbor, axis=1)
+        indexing_range = np.arange(fixed_grad_neighbor.shape[0])
+        a_link_to_fixed_grad = neighbor_links[indexing_range, which_neighbor]
+        corners = np.logical_not(true_fix_nodes)
+        assert np.all(
+            fixed_grad_neighbor[indexing_range, which_neighbor][corners])
+        self._fixed_gradient_boundary_node_links[
+            corners] = a_link_to_fixed_grad[corners]
+
+    def _create_fixed_gradient_boundary_node_anchor_node(self):
+        """
+        Builds a data structure to hold the nodes which anchor the
+        values of any FIXED_GRADIENT_BOUNDARY nodes in the grid, i.e., those
+        at the other ends of the FIXED_LINKS.
+
+        An AssertionError will be raised if for some reason a
+        FIXED_GRADIENT_BOUNDARY node exists which has neither a
+        FIXED_GRADIENT_BOUNDARY neighbor, or a FIXED_LINK.
+        """
+        self._fixed_grad_links_created = True
+        fix_grad_nodes = self.fixed_gradient_boundary_nodes
+        self._fixed_gradient_boundary_node_anchor_node = np.empty_like(
+            fix_grad_nodes)
+        heads_and_tails = np.empty((fix_grad_nodes.size, 2))
+        which_one = np.empty_like(heads_and_tails, dtype=bool)
+        heads_and_tails[:, 0] = self.node_at_link_head[
+            self.fixed_gradient_boundary_node_fixed_link]
+        heads_and_tails[:, 1] = self.node_at_link_tail[
+            self.fixed_gradient_boundary_node_fixed_link]
+        which_one[:, 0] = heads_and_tails[:, 0] == fix_grad_nodes
+        which_one[:, 1] = heads_and_tails[:, 1] == fix_grad_nodes
+        assert np.all(which_one.sum(axis=1) == 1)
+        self._fixed_gradient_boundary_node_anchor_node = heads_and_tails[
+            np.logical_not(which_one)]
 
     @property
+    @return_readonly_id_array
+    @cache_result_in_object()
+    def fixed_value_boundary_nodes(self):
+        """Get array of fixed value boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5), 1.)
+
+        Initially all the perimeter nodes are fixed value boundary.
+
+        >>> grid.fixed_value_boundary_nodes
+        array([ 0,  1,  2,  3,  4, 5,  9, 10, 14, 15, 16, 17, 18, 19])
+
+        Set left, right, and bottom edges to closed.
+
+        >>> for edge in (grid.nodes_at_left_edge, grid.nodes_at_right_edge,
+        ...              grid.nodes_at_bottom_edge):
+        ...     grid.status_at_node[edge] = grid.BC_NODE_IS_CLOSED
+
+        Now nodes on just the top edge are fixed.
+
+        >>> grid.fixed_value_boundary_nodes
+        array([16, 17, 18])
+
+        LLCATS: NINF BC
+        """
+        return numpy.where(self._node_status == FIXED_VALUE_BOUNDARY)[0]
+
+    @property
+    @return_readonly_id_array
+    @cache_result_in_object()
+    def active_faces(self):
+        """Get array of active faces.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.active_faces
+        array([0, 1, 2, 3, 4, 5, 6])
+
+        >>> from landlab import CLOSED_BOUNDARY
+        >>> grid.status_at_node[6] = CLOSED_BOUNDARY
+        >>> grid.active_faces
+        array([0, 2, 5])
+
+        LLCATS: FINF BC
+        """
+        return self.face_at_link[self.active_links]
+
+    @property
+    @return_readonly_id_array
+    @cache_result_in_object()
+    def active_links(self):
+        """Get array of active links.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.active_links
+        array([ 4,  5,  7,  8,  9, 11, 12])
+
+        LLCATS: LINF BC
+        """
+        return np.where(self.status_at_link == ACTIVE_LINK)[0]
+
+    @property
+    @return_readonly_id_array
+    @cache_result_in_object()
+    def fixed_links(self):
+        """Get array of fixed links.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, FIXED_GRADIENT_BOUNDARY
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.status_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([1, 1, 1, 1,
+               1, 0, 0, 1,
+               1, 1, 1, 1], dtype=uint8)
+        >>> grid.fixed_links.size
+        0
+
+        >>> grid.status_at_node[:4] = FIXED_GRADIENT_BOUNDARY
+        >>> grid.status_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([2, 2, 2, 2,
+               1, 0, 0, 1,
+               1, 1, 1, 1], dtype=uint8)
+        >>> grid.fixed_links
+        array([4, 5])
+
+        LLCATS: LINF BC
+        """
+        return np.where(self.status_at_link == FIXED_LINK)[0]
+
+    @property
+    @cache_result_in_object()
+    @return_readonly_id_array
+    def node_at_core_cell(self):
+        """Get array of nodes associated with core cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5), 1.)
+
+        Initially each cell's node is core.
+
+        >>> grid.node_at_core_cell
+        array([ 6,  7,  8,
+               11, 12, 13])
+
+        Setting a node to closed causes means its cell is also
+        "closed".
+
+        >>> grid.status_at_node[8] = grid.BC_NODE_IS_CLOSED
+        >>> grid.node_at_core_cell
+        array([ 6,  7, 11, 12, 13])
+
+        LLCATS: NINF CINF BC CONN
+        """
+        return numpy.where(self.status_at_node == CORE_NODE)[0]
+
+    @property
+    @make_return_array_immutable
+    @cache_result_in_object()
     def core_cells(self):
-        """Get array of core cells."""
-        return self._core_cells
+        """Get array of core cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5), 1.)
+
+        Initially all of the cells are "core".
+
+        >>> grid.core_cells
+        array([0, 1, 2,
+               3, 4, 5])
+
+        Setting a node to closed causes its cell to no longer be core.
+
+        >>> grid.status_at_node[8] = grid.BC_NODE_IS_CLOSED
+        >>> grid.core_cells
+        array([0, 1, 3, 4, 5])
+
+        LLCATS: CINF BC
+        """
+        return self.cell_at_node[self.core_nodes]
+
+    @property
+    def nodes_at_link(self):
+        """Get array of the nodes at each link.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((3, 4), 1.)
+        >>> mg.nodes_at_link # doctest: +NORMALIZE_WHITESPACE
+        array([[ 0, 1], [ 1,  2], [ 2,  3],
+               [ 0, 4], [ 1,  5], [ 2,  6], [ 3,  7],
+               [ 4, 5], [ 5,  6], [ 6,  7],
+               [ 4, 8], [ 5,  9], [ 6, 10], [ 7, 11],
+               [ 8, 9], [ 9, 10], [10, 11]])
+
+        LLCATS: NINF LINF CONN
+        """
+        return self._nodes_at_link
 
     @property
     def node_at_link_head(self):
-        """Get array of the node at each link head (*to-node*)."""
-        return self._node_at_link_head
+        """Get array of the node at each link head (*to-node*).
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.node_at_link_head[:5]
+        array([1, 2, 3, 4, 5])
+
+        LLCATS: NINF LINF CONN
+        """
+        return self._nodes_at_link[:, 1]
 
     @property
     def node_at_link_tail(self):
-        """Get array of the node at each link tail (*from-node*)."""
-        return self._node_at_link_tail
+        """Get array of the node at each link tail (*from-node*).
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.node_at_link_tail[:5]
+        array([0, 1, 2, 3, 0])
+
+        LLCATS: NINF LINF CONN
+        """
+        return self._nodes_at_link[:, 0]
 
     @property
     def face_at_link(self):
-        """Get array of faces associated with links."""
-        return self.link_face
+        """Get array of faces associated with links.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid, BAD_INDEX_VALUE
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.face_at_link[5:7]
+        array([0, 1])
+        >>> np.all(mg.face_at_link[:5]==BAD_INDEX_VALUE)
+        True
+
+        LLCATS: FINF LINF CONN
+        """
+        try:
+            return self._face_at_link
+        except AttributeError:
+            return self._create_face_at_link()
+
+    @property
+    def link_at_face(self):
+        """Get array of links associated with faces.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.link_at_face[0:3]
+        array([5, 6, 7])
+
+        LLCATS: LINF FINF CONN
+        """
+        try:
+            return self._link_at_face
+        except AttributeError:
+            return self._create_link_at_face()
 
     @property
     def number_of_nodes(self):
-        """Total number of nodes."""
-        return self._num_nodes
+        """Total number of nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5))
+        >>> grid.number_of_nodes
+        20
+
+        LLCATS: NINF
+        """
+        return len(self._cell_at_node)
+
+    @property
+    def number_of_corners(self):
+        """Total number of corners.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5))
+        >>> grid.number_of_corners
+        12
+
+        LLCATS: CNINF
+        """
+        return self.number_of_patches
 
     @property
     def number_of_cells(self):
-        """Total number of cells."""
-        return self._num_cells
+        """Total number of cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5))
+        >>> grid.number_of_cells
+        6
+
+        LLCATS: CINF
+        """
+        return len(self._node_at_cell)
 
     @property
     def number_of_links(self):
-        """Total number of links."""
-        return self._num_links
+        """Total number of links.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.number_of_links
+        17
+
+        LLCATS: LINF
+        """
+        return len(self.nodes_at_link)
 
     @property
     def number_of_faces(self):
-        """Total number of faces."""
-        return self._num_faces
+        """Total number of faces.
+
+        Returns
+        -------
+        int
+            Total number of faces in the grid.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.number_of_faces
+        7
+
+        LLCATS: FINF
+        """
+        return len(self.link_at_face)
 
     @property
-    def number_of_active_nodes(self):
-        """Number of active nodes.
+    def number_of_active_faces(self):
+        """Total number of active faces.
 
-        An active node is either a core node or an open-boundary node.
+        Returns
+        -------
+        int
+            Total number of active faces in the grid.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4))
+        >>> grid.number_of_active_faces
+        7
+
+        The number of active faces is updated when a node status changes.
+
+        >>> from landlab import CLOSED_BOUNDARY
+        >>> grid.status_at_node[6] = CLOSED_BOUNDARY
+        >>> grid.number_of_active_faces
+        3
+
+        LLCATS: FINF BC
         """
-        return self._num_active_nodes
+        return self.active_faces.size
 
     @property
     def number_of_core_nodes(self):
         """Number of core nodes.
 
-        A core node is a non-boundary node
-        """
-        return self._num_core_nodes
+        The number of core nodes on the grid (i.e., excluding all boundary
+        nodes).
 
-    @property
-    def number_of_active_cells(self):
-        """Number of active cells.
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> grid = RasterModelGrid((4, 5))
+        >>> grid.number_of_core_nodes
+        6
 
-        An active cell includes any possible boundary cells.
+        >>> grid.status_at_node[7] = CLOSED_BOUNDARY
+        >>> grid.number_of_core_nodes
+        5
+
+        LLCATS: NINF BC
         """
-        return self._num_active_cells
+        return self.core_nodes.size
 
     @property
     def number_of_core_cells(self):
         """Number of core cells.
 
         A core cell excludes all boundary cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> grid = RasterModelGrid((4, 5))
+        >>> grid.number_of_core_cells
+        6
+
+        >>> grid.status_at_node[7] = CLOSED_BOUNDARY
+        >>> grid.number_of_core_cells
+        5
+
+        LLCATS: CINF BC
         """
-        return self._num_core_cells
+        return self.core_cells.size
 
     @property
     def number_of_active_links(self):
-        """Number of active links."""
-        try:
-            return self._num_active_links
-        except AttributeError:
-            self._reset_link_status_list()
-            return self._num_active_links
+        """Number of active links.
 
-    @property
-    def number_of_active_faces(self):
-        """Number of active faces."""
-        try:
-            return self._num_active_faces
-        except AttributeError:
-            self._reset_link_status_list()
-            return self._num_active_faces
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.number_of_active_links
+        17
+        >>> for edge in (mg.nodes_at_left_edge, mg.nodes_at_right_edge,
+        ...              mg.nodes_at_bottom_edge):
+        ...     mg.status_at_node[edge] = CLOSED_BOUNDARY
+        >>> mg.number_of_active_links
+        10
+
+        LLCATS: LINF BC
+        """
+        return self.active_links.size
 
     @property
     def number_of_fixed_links(self):
-        """Number of fixed links."""
-        try:
-            return self._num_fixed_links
-        except AttributeError:
-            self._reset_link_status_list()
-            return self._num_fixed_links
+        """Number of fixed links.
 
-    @property
-    def number_of_fixed_faces(self):
-        """Number of fixed faces."""
-        try:
-            return self._num_fixed_faces
-        except AttributeError:
-            self._reset_link_status_list()
-            return self._num_fixed_faces
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, FIXED_GRADIENT_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.number_of_fixed_links
+        0
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = FIXED_GRADIENT_BOUNDARY
+        >>> mg.number_of_fixed_links
+        3
 
-    def number_of_elements(self, element_name):
+        LLCATS: LINF BC
+        """
+        return self.fixed_links.size
+
+    def number_of_elements(self, name):
         """Number of instances of an element.
 
         Get the number of instances of a grid element in a grid.
 
         Parameters
         ----------
-        element_name : {'node', 'cell', 'link', 'face', 'core_node',
-            'core_cell', 'active_link', 'active_face'}
+        name : {'node', 'cell', 'link', 'face', 'core_node', 'core_cell',
+                'active_link', 'active_face'}
             Name of the grid element.
 
         Returns
         -------
         int
             Number of elements in the grid.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.number_of_elements('node')
+        20
+        >>> mg.number_of_elements('core_cell')
+        6
+        >>> mg.number_of_elements('link')
+        31
+        >>> mg.number_of_elements('active_link')
+        17
+        >>> mg.status_at_node[8] = CLOSED_BOUNDARY
+        >>> mg.number_of_elements('link')
+        31
+        >>> mg.number_of_elements('active_link')
+        13
+
+        LLCATS: GINF
         """
         try:
-            return getattr(self, _ARRAY_LENGTH_ATTRIBUTES[element_name])
+            return getattr(self, _ARRAY_LENGTH_ATTRIBUTES[name])
         except KeyError:
-            raise TypeError('element name not understood')
+            raise TypeError(
+                '{name}: element name not understood'.format(name=name))
 
     @property
     @make_return_array_immutable
     def node_x(self):
-        """Get array of the x-coordinates of nodes."""
-        return self._node_x
+        """Get array of the x-coordinates of nodes.
+
+        See also
+        --------
+        x_of_node
+            Exquivalent method.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.node_x.reshape((4, 5))
+        array([[  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.]])
+
+        LLCATS: NINF MEAS
+        """
+        return self._xy_of_node[:, 0]
 
     @property
     @make_return_array_immutable
     def node_y(self):
-        """Get array of the y-coordinates of nodes."""
-        return self._node_y
+        """Get array of the y-coordinates of nodes.
+
+        See also
+        --------
+        y_of_node
+            Exquivalent method.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.node_y.reshape((4, 5))
+        array([[ 0.,  0.,  0.,  0.,  0.],
+               [ 2.,  2.,  2.,  2.,  2.],
+               [ 4.,  4.,  4.,  4.,  4.],
+               [ 6.,  6.,  6.,  6.,  6.]])
+
+        LLCATS: NINF MEAS
+        """
+        return self._xy_of_node[:, 1]
+
+    @property
+    @make_return_array_immutable
+    def xy_of_node(self):
+        """Get array of the x- and y-coordinates of nodes.
+
+        See also
+        --------
+        x_of_node, y_of_node
+            Exquivalent methods for just x and y coordinates.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4), (2., 3.))
+        >>> grid.xy_of_node # doctest: +NORMALIZE_WHITESPACE
+        array([[ 0., 0.], [ 3., 0.], [ 6., 0.], [ 9., 0.],
+               [ 0., 2.], [ 3., 2.], [ 6., 2.], [ 9., 2.],
+               [ 0., 4.], [ 3., 4.], [ 6., 4.], [ 9., 4.]])
+        >>> np.all(grid.xy_of_node[:, 0] == grid.x_of_node)
+        True
+        >>> np.all(grid.xy_of_node[:, 1] == grid.y_of_node)
+        True
+
+        LLCATS: NINF MEAS
+        """
+        return self._xy_of_node
+
+    @property
+    @make_return_array_immutable
+    def x_of_node(self):
+        """Get array of the x-coordinates of nodes.
+
+        See also
+        --------
+        node_x
+            Exquivalent method.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.x_of_node.reshape((4, 5))
+        array([[  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.],
+               [  0.,   3.,   6.,   9.,  12.]])
+
+        LLCATS: NINF MEAS
+        """
+        return self._xy_of_node[:, 0]
+
+    @property
+    @make_return_array_immutable
+    def y_of_node(self):
+        """Get array of the y-coordinates of nodes.
+
+        See also
+        --------
+        node_y
+            Exquivalent method.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.y_of_node.reshape((4, 5))
+        array([[ 0.,  0.,  0.,  0.,  0.],
+               [ 2.,  2.,  2.,  2.,  2.],
+               [ 4.,  4.,  4.,  4.,  4.],
+               [ 6.,  6.,  6.,  6.,  6.]])
+
+        LLCATS: NINF MEAS
+        """
+        return self._xy_of_node[:, 1]
+
+    @property
+    @make_return_array_immutable
+    def x_of_cell(self):
+        """Get array of the x-coordinates of nodes at cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.x_of_cell.reshape((2, 3))
+        array([[  3.,   6.,   9.],
+               [  3.,   6.,   9.]])
+
+        LLCATS: CINF MEAS
+        """
+        return self.x_of_node[self.node_at_cell]
+
+    @property
+    @make_return_array_immutable
+    def y_of_cell(self):
+        """Get array of the y-coordinates of nodes at cells.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.y_of_cell.reshape((2, 3))
+        array([[ 2.,  2.,  2.],
+               [ 4.,  4.,  4.]])
+
+        LLCATS: CINF MEAS
+        """
+        return self.y_of_node[self.node_at_cell]
+
+    @property
+    @cache_result_in_object()
+    @make_return_array_immutable
+    def x_of_link(self):
+        """Get array of the x-coordinates of link midpoints.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.x_of_link # doctest: +NORMALIZE_WHITESPACE
+        array([  1.5,   4.5,   7.5,  10.5,   0. ,   3. ,   6. ,   9. ,  12. ,
+                 1.5,   4.5,   7.5,  10.5,   0. ,   3. ,   6. ,   9. ,  12. ,
+                 1.5,   4.5,   7.5,  10.5,   0. ,   3. ,   6. ,   9. ,  12. ,
+                 1.5,   4.5,   7.5,  10.5])
+
+        LLCATS: LINF MEAS
+        """
+        return np.mean(self.x_of_node[self.nodes_at_link], axis=1)
+
+    @property
+    @cache_result_in_object()
+    @make_return_array_immutable
+    def y_of_link(self):
+        """Get array of the y-coordinates of link midpoints.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.y_of_link # doctest: +NORMALIZE_WHITESPACE
+        array([ 0.,  0.,  0.,  0.,  1.,  1.,  1.,  1.,  1.,
+                2.,  2.,  2.,  2.,  3.,  3.,  3.,  3.,  3.,
+                4.,  4.,  4.,  4.,  5.,  5.,  5.,  5.,  5.,
+                6.,  6.,  6.,  6.])
+
+        LLCATS: LINF MEAS
+        """
+        return np.mean(self.y_of_node[self.nodes_at_link], axis=1)
+
+    @property
+    @cache_result_in_object()
+    @make_return_array_immutable
+    def x_of_face(self):
+        """Get array of the x-coordinates of face midpoints.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.x_of_face # doctest: +NORMALIZE_WHITESPACE
+        array([  3. ,   6. ,   9. ,   1.5,   4.5,   7.5,  10.5,
+                 3. ,   6. ,   9. ,   1.5,   4.5,   7.5,  10.5,
+                 3. ,   6. ,   9. ])
+
+        LLCATS: FINF MEAS
+        """
+        return self.x_of_link[self.link_at_face]
+
+    @property
+    @cache_result_in_object()
+    @make_return_array_immutable
+    def y_of_face(self):
+        """Get array of the y-coordinates of face midpoints.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.y_of_face # doctest: +NORMALIZE_WHITESPACE
+        array([ 1.,  1.,  1.,  2.,  2.,  2.,  2.,  3.,  3.,  3.,
+                4.,  4.,  4.,  4.,  5.,  5.,  5.])
+
+        LLCATS: FINF MEAS
+        """
+        return self.y_of_link[self.link_at_face]
 
     @make_return_array_immutable
     def node_axis_coordinates(self, axis=0):
@@ -853,6 +1694,8 @@ class ModelGrid(ModelDataFields):
                 0., 1., 2., 3., 4.,
                 0., 1., 2., 3., 4.,
                 0., 1., 2., 3., 4.])
+
+        LLCATS: GINF NINF MEAS
         """
         AXES = ('node_y', 'node_x')
         try:
@@ -868,6 +1711,18 @@ class ModelGrid(ModelDataFields):
         -------
         tuple of str
             The units (as a string) for each of a grid's coordinates.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (2., 3.))
+        >>> mg.axis_units
+        ('-', '-')
+        >>> mg.axis_units = ('km', 'km')
+        >>> mg.axis_units
+        ('km', 'km')
+
+        LLCATS: GINF
         """
         return self._axis_units
 
@@ -893,6 +1748,11 @@ class ModelGrid(ModelDataFields):
         >>> grid = RasterModelGrid((4, 5))
         >>> grid.axis_name
         ('y', 'x')
+        >>> grid.axis_name = ('lon', 'lat')
+        >>> grid.axis_name
+        ('lon', 'lat')
+
+        LLCATS: GINF
         """
         return self._axis_name
 
@@ -919,454 +1779,848 @@ class ModelGrid(ModelDataFields):
 
     @property
     @make_return_array_immutable
+    @cache_result_in_object()
     def status_at_link(self):
-        """Get array of the status of all links."""
-        return self._link_status
+        """Get array of the status of all links.
 
-    @status_at_node.setter
-    def status_at_node(self, new_status_array):
-        self._node_status[:] = new_status_array[:]
-        self.update_links_nodes_cells_to_new_BCs()
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> from landlab import CLOSED_BOUNDARY, FIXED_GRADIENT_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5), 1.)
+        >>> mg.status_at_node[mg.nodes_at_left_edge] = CLOSED_BOUNDARY
+        >>> mg.status_at_node[mg.nodes_at_right_edge] = FIXED_GRADIENT_BOUNDARY
+        >>> mg.status_at_link # doctest: +NORMALIZE_WHITESPACE
+        array([4, 4, 4, 4, 4, 0, 0, 0, 4, 4, 0, 0, 2, 4, 0, 0, 0, 4, 4, 0, 0,
+               2, 4, 0, 0, 0, 4, 4, 4, 4, 4], dtype=uint8)
 
-    def active_links_at_node(self, *args):
-        """active_links_at_node([node_ids])
-        Active links of a node.
+        LLCATS: BC LINF
+        """
+        return set_status_at_link(self.status_at_node[self.nodes_at_link])
 
-        Parameters
-        ----------
-        node_ids : int or list of ints
-                   ID(s) of node(s) for which to find connected active links
+    @property
+    @return_readonly_id_array
+    def link_at_face(self):
+        """Get links associated with faces.
 
-        Returns
-        -------
-        (M, N) ndarray
-            The ids of active links attached to grid nodes with
-            *node_ids*. If *node_ids* is not given, return links for all of
-            the nodes in the grid. M is the number of rows in the grid's
-            node_active_inlink_matrix, which can vary depending on the type
-            and structure of the grid; in a hex grid, for example, it is 6.
+        Returns an array of the link IDs for the links that intersect
+        faces.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((3, 4))
+        >>> mg.link_at_face
+        array([ 4,  5,  7,  8,  9, 11, 12])
+
+        LLCATS: LINF FINF MEAS
+        """
+        try:
+            return self._link_at_face
+        except AttributeError:
+            return self._create_link_at_face()
+
+    def _create_number_of_links_at_node(self):
+        """Find and record how many links are attached to each node.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((3, 4))
+        >>> mg.number_of_links_at_node
+        array([2, 3, 3, 2, 3, 4, 4, 3, 2, 3, 3, 2])
+        """
+        self._number_of_links_at_node = np.zeros(self.number_of_nodes,
+                                                 dtype=np.int)
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for ln in range(self.number_of_links):
+            self._number_of_links_at_node[node_at_link_tail[ln]] += 1
+            self._number_of_links_at_node[node_at_link_head[ln]] += 1
+
+    @property
+    def number_of_links_at_node(self):
+        """Number of links connected to each node.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((3, 4))
+        >>> mg.number_of_links_at_node
+        array([2, 3, 3, 2, 3, 4, 4, 3, 2, 3, 3, 2])
+
+        LLCATS: LINF NINF CONN
+        """
+        try:
+            return self._number_of_links_at_node
+        except AttributeError:
+            self._create_number_of_links_at_node()
+            return self._number_of_links_at_node
+
+    def _create_links_and_link_dirs_at_node(self):
+        """Make arrays with links and link directions at each node.
 
         Examples
         --------
         >>> from landlab import HexModelGrid
-        >>> hmg = HexModelGrid(3, 2)
-        >>> hmg.active_links_at_node(3)
-        array([[-1],
-               [-1],
-               [-1],
-               [-1],
-               [-1],
-               [-1],
-               [ 0],
-               [ 1],
-               [ 2],
-               [ 3],
-               [ 4],
-               [ 5]])
-        >>> hmg.active_links_at_node()
-        array([[ 3,  5,  2, -1,  4,  1,  0],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1,  0, -1, -1, -1],
-               [-1, -1, -1,  1, -1, -1, -1],
-               [-1, -1, -1,  2, -1, -1, -1],
-               [-1, -1, -1,  3, -1, -1, -1],
-               [-1, -1, -1,  4, -1, -1, -1],
-               [-1, -1, -1,  5, -1, -1, -1]])
+        >>> hg = HexModelGrid(3, 3)
+        >>> hg.links_at_node
+        array([[ 0,  3,  2, -1, -1, -1],
+               [ 1,  5,  4,  0, -1, -1],
+               [ 7,  6,  1, -1, -1, -1],
+               [ 8, 11,  2, -1, -1, -1],
+               [ 9, 13, 12,  8,  3,  4],
+               [10, 15, 14,  9,  5,  6],
+               [16, 10,  7, -1, -1, -1],
+               [17, 11, 12, -1, -1, -1],
+               [18, 17, 13, 14, -1, -1],
+               [18, 15, 16, -1, -1, -1]])
+        >>> hg.link_dirs_at_node
+        array([[-1, -1, -1,  0,  0,  0],
+               [-1, -1, -1,  1,  0,  0],
+               [-1, -1,  1,  0,  0,  0],
+               [-1, -1,  1,  0,  0,  0],
+               [-1, -1, -1,  1,  1,  1],
+               [-1, -1, -1,  1,  1,  1],
+               [-1,  1,  1,  0,  0,  0],
+               [-1,  1,  1,  0,  0,  0],
+               [-1,  1,  1,  1,  0,  0],
+               [ 1,  1,  1,  0,  0,  0]], dtype=int8)
         """
-        if len(args) == 0:
-            return numpy.vstack((self.node_active_inlink_matrix,
-                                 self.node_active_outlink_matrix))
-        elif len(args) == 1:
-            node_ids = numpy.broadcast_arrays(args[0])[0]
-            return numpy.vstack(
-                (self.node_active_inlink_matrix[:, node_ids],
-                 self.node_active_outlink_matrix[:, node_ids])
-            ).reshape(2 * numpy.size(self.node_active_inlink_matrix, 0), -1)
-        else:
-            raise ValueError('only zero or one arguments accepted')
+        # Find maximum number of links per node
+        nlpn = self.number_of_links_at_node
+        # ^this fn should become member and property
+        max_num_links = np.amax(nlpn)
+        nlpn[:] = 0  # we'll zero it out, then rebuild it
 
-    def active_links_at_node2(self, *args):
-        """active_links_at_node2([node_ids])
-        Get active links attached to nodes.
+        # Create arrays for link-at-node information
+        self._links_at_node = - np.ones((self.number_of_nodes, max_num_links),
+                                        dtype=int)
+        self._link_dirs_at_node = np.zeros((self.number_of_nodes,
+                                            max_num_links), dtype=np.int8)
 
-        Parameters
-        ----------
-        node_ids : int or list of ints (optional)
-                   ID(s) of node(s) for which to find connected active links.
-                   (Default: all nodes)
+        # Sweep over all links
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for lk in range(self.number_of_links):
+            # Find the IDs of the tail and head nodes
+            t = node_at_link_tail[lk]
+            h = node_at_link_head[lk]
 
-        Returns
-        -------
-        (M, N) ndarray
-            The link IDs of active links attached to grid nodes with
-            *node_ids*. If *node_ids* is not given, return links for all of
-            the nodes in the grid. M is the number of rows in the grid's
-            node_active_inlink_matrix, which can vary depending on the type
-            and structure of the grid; in a hex grid, for example, it is 6.
+            # Add this link to the list for this node, set the direction
+            # (outgoing, indicated by -1), and increment the number found so
+            # far
+            self._links_at_node[t][nlpn[t]] = lk
+            self._links_at_node[h][nlpn[h]] = lk
+            self._link_dirs_at_node[t][nlpn[t]] = -1
+            self._link_dirs_at_node[h][nlpn[h]] = 1
+            nlpn[t] += 1
+            nlpn[h] += 1
+
+        # Sort the links at each node by angle, counter-clockwise from +x
+        self._sort_links_at_node_by_angle()
+
+    @property
+    @make_return_array_immutable
+    def angle_of_link(self):
+        """Find and return the angle of a link about the node at the link tail.
 
         Examples
         --------
         >>> from landlab import HexModelGrid
-        >>> hmg = HexModelGrid(3, 2)
-        >>> hmg.active_links_at_node2(3)
-        array([[-1],
-               [-1],
-               [-1],
-               [-1],
-               [-1],
-               [-1],
-               [ 0],
-               [ 1],
-               [ 2],
-               [ 3],
-               [ 4],
-               [ 5]])
-        >>> hmg.active_links_at_node2()
-        array([[ 3,  5,  2, -1,  4,  1,  0],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1,  0, -1, -1, -1],
-               [-1, -1, -1,  1, -1, -1, -1],
-               [-1, -1, -1,  2, -1, -1, -1],
-               [-1, -1, -1,  3, -1, -1, -1],
-               [-1, -1, -1,  4, -1, -1, -1],
-               [-1, -1, -1,  5, -1, -1, -1]])
+        >>> mg = HexModelGrid(3, 2)
+        >>> mg.angle_of_link / np.pi * 3.  # 60 degree segments
+        array([ 0.,  2.,  1.,  2.,  1.,  0.,  0.,  1.,  2.,  1.,  2.,  0.])
 
+        LLCATS: LINF MEAS
         """
-        if len(args) == 0:
-            return numpy.vstack((self.node_active_inlink_matrix2,
-                                 self.node_active_outlink_matrix2))
-        elif len(args) == 1:
-            node_ids = numpy.broadcast_arrays(args[0])[0]
-            return numpy.vstack(
-                (self.node_active_inlink_matrix2[:, node_ids],
-                 self.node_active_outlink_matrix2[:, node_ids])
-            ).reshape(2 * numpy.size(self.node_active_inlink_matrix2, 0), -1)
-        else:
-            raise ValueError('only zero or one arguments accepted')
-
-    def create_node_array_zeros(self, name=None, **kwds):
-        """Create an array of the given type, filled with zeros.
-
-        Returns a 1D numpy array the same length as the number of nodes. If
-        user gives optional argument *name*, we add this data to the grid with
-        the specified name and return a reference to it; otherwise, we just
-        create and return a 1D numpy array.
-
-        Parameters
-        ----------
-        name : str, optional
-            Name of the quantity.
-
-        Returns
-        -------
-        ndarray
-            The newly created array.
-
-        See Also
-        --------
-        zeros
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(4,5)
-        >>> mydata = np.arange(20, dtype=float)
-        >>> rmg.create_node_array_zeros('topographic__elevation')
-        array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-                0.,  0.,  0.,  0.,  0.,  0.,  0.])
-        >>> rmg.at_node['topographic__elevation'] = mydata
-        >>> rmg.at_node['topographic__elevation']
-        ...     # doctest: +NORMALIZE_WHITESPACE
-        array([  0.,   1.,   2.,   3.,   4.,   5.,   6.,   7.,   8.,   9.,
-                10., 11.,  12.,  13.,  14.,  15.,  16.,  17.,  18.,  19.])
-        """
-        if name is None:
-            return numpy.zeros(self.number_of_nodes, **kwds)
-        else:
-            self.add_zeros('node', name, **kwds)
-            return self.at_node[name]
-
-    def create_active_link_array_zeros(self, name=None):
-        """Array, filled with zeros, for values at active links.
-
-        Returns a 1D numpy array the same length as the number of nodes. If
-        user gives optional argument 'name', we add this data to the grid with
-        the specified name and return a reference to it; otherwise, we just
-        create and return a 1D numpy array.
-
-        Parameters
-        ----------
-        name : str
-            Name of the quantity.
-
-        Returns
-        -------
-        ndarray
-            The newly created array.
-
-        See Also
-        --------
-        zeros
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> grid = RasterModelGrid(3, 3)
-        >>> grid.create_active_link_array_zeros()
-        array([ 0.,  0.,  0.,  0.])
-        """
-        if name is None:
-            return numpy.zeros(self.number_of_active_links)
-        else:
-            self.add_zeros('link', name)
-            return self.at_link[name]
-
-    def zeros(self, **kwds):
-        """Array, filled with zeros, for a given element.
-
-        Returns a numpy array of zeros that is the same length as the number
-        of nodes in the grid. Use the *centering* keyword to return an
-        array for other elements of the grid. *centering* is a string that is
-        one of *node*, *cell*, *link*, or *face*.
-
-        All other keywords are the same as for the numpy zeros function.
-
-        Parameters
-        ----------
-        centering : str, optional
-            Grid element on which the values are defined.
-
-        Returns
-        -------
-        ndarray
-            A newly-allocated array.
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> grid = RasterModelGrid((4, 5))
-        >>> grid.zeros()
-        array([ 0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-                0.,  0.,  0.,  0.,  0.,  0.,  0.])
-        """
-        centering = kwds.pop('centering', 'node')
         try:
-            return numpy.zeros(self.number_of_elements(centering), **kwds)
-        except KeyError:
-            raise TypeError(centering)
+            if not self._angle_of_link_created:
+                self._create_angle_of_link()
+        except AttributeError:
+            self._create_angle_of_link()
+        return self._angle_of_link_bothends[-1]
 
-    def empty(self, **kwds):
-        """Array, filled with unititialized values, for a given element.
+    @property
+    @make_return_array_immutable
+    def angle_of_link_about_head(self):
+        """Find and return the angle of a link about the node at the link head.
 
-        Returns a numpy array of uninitialized values that is the same length
-        as the number of nodes in the grid. Use the *centering* keyword to
-        return an array for other elements of the grid. *centering* is a
-        string that is one of *node*, *cell*, *link*, or *face*.
-
-        All other keywords are the same as for the numpy zeros function.
-
-        Parameters
-        ----------
-        centering : str, optional
-            Grid element on which the values are defined.
-
-        Returns
-        -------
-        ndarray
-            A newly-allocated array.
+        Because links have direction, their angle can be specified as an angle
+        about either the node at the link head, or the node at the link tail.
+        The default behaviour of `angle_of_link` is to return the angle about
+        the link tail, but this method gives the angle about the link head.
 
         Examples
         --------
-        >>> from landlab import RasterModelGrid
-        >>> grid = RasterModelGrid((4, 5))
-        >>> len(grid.empty())
-        20
+        >>> from landlab import HexModelGrid
+        >>> mg = HexModelGrid(3, 2)
+        >>> mg.angle_of_link_about_head[:3] / np.pi * 3.  # 60 deg segments
+        array([ 3.,  5.,  4.])
+
+        LLCATS: LINF MEAS
         """
-        centering = kwds.pop('centering', 'node')
         try:
-            return numpy.empty(self.number_of_elements(centering), **kwds)
-        except KeyError:
-            raise TypeError(centering)
+            if not self._angle_of_link_created:
+                self._create_angle_of_link()
+        except AttributeError:
+            self._create_angle_of_link()
+        return self._angle_of_link_bothends[1]
 
-    def ones(self, **kwds):
-        """Array, filled with ones, for a given element.
-
-        Returns a numpy array of ones that is the same length as the number
-        of nodes in the grid. Use the *centering* keyword to return an
-        array for other elements of the grid. *centering* is a string that is
-        one of *node*, *cell*, *link*, or *face*.
-
-        All other keywords are the same as for the numpy zeros function.
-
-        Parameters
-        ----------
-        centering : str, optional
-            Grid element on which the values are defined.
-
-        Returns
-        -------
-        ndarray
-            A newly-allocated array.
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> grid = RasterModelGrid((4, 5))
-        >>> grid.zeros(dtype=int)
-        array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    def _create_angle_of_link(self):
         """
-        centering = kwds.pop('centering', 'node')
-        try:
-            return numpy.ones(self.number_of_elements(centering), **kwds)
-        except KeyError:
-            raise TypeError(centering)
+        Build a dict with keys (-1, 1) that contains the angles of the links
+        about both the link heads (1) and link tails (-1).
+
+        Notes
+        -----
+        dx and dy are the x and y differences between the link endpoints.
+        Multiplying this by dirs orients these offsets correctly (i.e.,
+        the correct node is the origin). The call to arctan2 calculates
+        the angle in radians. Angles in the lower two quadrants will be
+        negative and clockwise from the positive x axis. We want them
+        counter-clockwise, which is what the last couple of lines before
+        the return statement do.
+
+        LLCATS: LINF MEAS
+        """
+        self._angle_of_link_bothends = {}
+        for dirs in (-1, 1):
+            dx = -dirs * (self.node_x[self.node_at_link_head] -
+                          self.node_x[self.node_at_link_tail])
+            dy = -dirs * (self.node_y[self.node_at_link_head] -
+                          self.node_y[self.node_at_link_tail])
+            ang = np.arctan2(dy, dx)
+            (lower_two_quads, ) = np.where(ang < 0.0)
+            ang[lower_two_quads] = (2 * np.pi) + ang[lower_two_quads]
+            (no_link, ) = np.where(dirs == 0)
+            ang[no_link] = 2*np.pi
+            self._angle_of_link_bothends[dirs] = ang.copy()
+        self._angle_of_link_created = True
+
+    def _sort_links_at_node_by_angle(self):
+        """Sort the links_at_node and link_dirs_at_node arrays by angle.
+        """
+        ang = self.angle_of_link[self.links_at_node]
+        linkhead_at_node = self.link_dirs_at_node == 1
+        ang[linkhead_at_node] = self.angle_of_link_about_head[
+            self.links_at_node[linkhead_at_node]]
+        ang[self.link_dirs_at_node == 0] = 100.
+        argsorted = np.argsort(ang, axis=1)
+        indices = np.indices(ang.shape)[0] * ang.shape[1] + argsorted
+        self._links_at_node.flat = self._links_at_node.flat[indices.flatten()]
+        self._link_dirs_at_node.flat = self._link_dirs_at_node.flat[
+            indices.flatten()]
 
     def resolve_values_on_links(self, link_values, out=None):
         """Resolve the xy-components of links.
 
         Resolves values provided defined on links into the x and y directions.
         Returns values_along_x, values_along_y
+
+        LLCATS: LINF
         """
         return gfuncs.resolve_values_on_links(self, link_values, out=out)
 
+    @deprecated(use='no replacement', version=1.0)
     def resolve_values_on_active_links(self, link_values, out=None):
         """Resolve the xy-components of active links.
 
         Resolves values provided defined on active links into the x and y
         directions.
         Returns values_along_x, values_along_y
+
+        LLCATS: LINF
         """
         return gfuncs.resolve_values_on_active_links(self, link_values,
                                                      out=out)
 
-    def node_slopes_using_patches(self, elevs='topographic__elevation',
-                                  unit='degrees', return_components=False):
+    def link_at_node_is_upwind(self, values, out=None):
         """
-        trial run to extract average local slopes at nodes by the average slope
-        of its surrounding patches. DEJH 10/1/14
-        elevs either a field name or an nnodes-array.
-        unit is 'degrees' or 'radians'.
-        If return_components=False (the default), returns the slope magnitude.
-        If return_components=True, returns the slope magnitude, then the vector
-        (a tuple) of the slope components in the x, y directions.
-        If closed nodes were present in the original array, their values will
-        be masked.
-        """
-        dummy_patch_nodes = numpy.empty(
-            (self.nodes_at_patch.shape[0] + 1, self.nodes_at_patch.shape[1]),
-            dtype=int)
-        dummy_patch_nodes[:-1, :] = self.nodes_at_patch[:]
-        dummy_patch_nodes[-1, :] = -1
+        Return a boolean the same shape as :func:`links_at_node` which flags
+        links which are upwind of the node as True.
 
-        # Now any ref to a null node will be -1 in this new
-        # (N, patch_max_dim, 4or3) array.
-        nodes_on_patches = dummy_patch_nodes[self.patches_at_node()][:, :, :3]
-        # Note: we truncate the array to be [N, patch_max_dim,3]; we only
-        # need 3 pts per patch, if we're working on a raster
-
-        # Using the wrong values in -1 won't matter, as we'll mask with
-        # nodes_on_patches at the end
-        node_elevs = numpy.ones((nodes_on_patches.shape[0],
-                                 nodes_on_patches.shape[1], 3, 3),
-                                dtype=float)
-
-        mask_from_nop = nodes_on_patches[:, :, 0] == -1
-        node_elevs[:, :, :, 0] = self.node_x[nodes_on_patches]
-        node_elevs[:, :, :, 1] = self.node_y[nodes_on_patches]
-        c = numpy.ma.array(numpy.linalg.det(node_elevs), mask=mask_from_nop)
-        try:
-            node_elevs[:, :, :, 2] = self.at_node[elevs][nodes_on_patches]
-        except TypeError:
-            node_elevs[:, :, :, 2] = elevs[nodes_on_patches]
-        node_elevs[:, :, :, 1] = 1.
-        b = numpy.linalg.det(node_elevs)
-        node_elevs[:, :, :, 1] = self.node_y[nodes_on_patches]
-        node_elevs[:, :, :, 0] = 1.
-        a = numpy.linalg.det(node_elevs)
-
-        mask_from_nop = nodes_on_patches[:, :, 0] == -1
-        grad_x = -a / c
-        grad_y = -b / c  # ...still for each patch
-        mean_grad_x = numpy.mean(grad_x, axis=1)
-        mean_grad_y = numpy.mean(grad_y, axis=1)
-
-        slope_mag = numpy.arctan(numpy.sqrt(mean_grad_x**2 + mean_grad_y**2))
-
-        if unit == 'radians':
-            if not return_components:
-                return slope_mag
-            else:
-                return slope_mag, (mean_grad_x, mean_grad_y)
-        if unit == 'degrees':
-            if not return_components:
-                return 180. / numpy.pi * slope_mag
-            else:
-                return 180. / numpy.pi * slope_mag, (mean_grad_x, mean_grad_y)
-        else:
-            raise TypeError("unit must be 'degrees' or 'radians'")
-
-    def node_slopes(self, **kwargs):
-        """Array of slopes at nodes.
-
-        This method is an alias for :any:`node_slopes_using_patches`.
+        link_at_node_is_upwind iterates across the grid and identifies the link
+        values at each link connected to a node. It then uses the
+        link_dirs_at_node data structure to identify links bringing flux into
+        the node. It then return a boolean array the same shape as
+        links_at_node flagging these links. e.g., for a raster, the returned
+        array will be shape (nnodes, 4).
 
         Parameters
         ----------
-        elevs : str or ndarray, optional
-            Field name or array of node values.
-        unit : {'degrees', 'radians'}
-            Units for slopes.
+        values : str or array
+            Name of variable field defined at links, or array of values at
+            links.
+        out : ndarray, optional
+            Buffer to place mapped values into or `None` to create a new array.
+            Must be correct shape and boolean dtype.
+
+        Returns
+        -------
+        ndarray
+            Boolean of which links are upwind at nodes.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid
+
+        >>> rmg = RasterModelGrid((3, 4))
+        >>> rmg.at_link['grad'] = np.array([-1., -2., -1.,
+        ...                                 -2., -3., -4., -5.,
+        ...                                 -1., -2., -1.,
+        ...                                 -1., -2., -3., -4.,
+        ...                                 -1., -2., -1.])
+        >>> rmg.link_at_node_is_upwind('grad')
+        array([[False, False, False, False],
+               [False, False,  True, False],
+               [False, False,  True, False],
+               [False, False,  True, False],
+               [False, False, False,  True],
+               [False, False,  True,  True],
+               [False, False,  True,  True],
+               [False, False,  True,  True],
+               [False, False, False,  True],
+               [False, False,  True,  True],
+               [False, False,  True,  True],
+               [False, False,  True,  True]], dtype=bool)
+
+        LLCATS: LINF NINF CONN
         """
-        return self.node_slopes_using_patches(**kwargs)
+        if out is None:
+            out = np.empty_like(self.links_at_node, dtype=bool)
+        else:
+            assert out.shape is self.links_at_node.shape
+            assert out.dtype is bool
+        if type(values) is str:
+            vals = self.at_link[values]
+        else:
+            assert len(values) == self.number_of_links
+            vals = values
+        values_at_links = vals[self.links_at_node] * self.link_dirs_at_node
+        # this procedure makes incoming links NEGATIVE
+        np.less(values_at_links, 0., out=out)
 
-    def aspect(self, slope_component_tuple=None,
-               elevs='topographic__elevation', unit='degrees'):
-        """Get array of aspect of a surface.
+        return out
 
-        Calculates at returns the aspect of a surface. Aspect is returned as
-        radians clockwise of north, unless input parameter units is set to
-        'degrees'.
-
-        If slope_component_tuple is provided, i.e., (slope_x, slope_y), the
-        aspect will be calculated from these data.
-
-        If it is not, it will be derived from elevation data at the nodes,
-        which can either be a string referring to a grid field (default:
-        'topographic__elevation'), or an nnodes-long numpy array of the
-        values themselves.
+    def link_at_node_is_downwind(self, values, out=None):
         """
-        if slope_component_tuple:
-            assert type(slope_component_tuple) == tuple
-            assert len(slope_component_tuple) == 2
-        else:
-            try:
-                elev_array = self.at_node[elevs]
-            except MissingKeyError:
-                assert elevs.size == self.number_of_nodes
-                elev_array = elevs
-            _, slope_component_tuple = self.node_slopes_using_patches(
-                elevs=elev_array, return_components=True)
-        angle_from_x_ccw = numpy.arctan2(
-            slope_component_tuple[1], slope_component_tuple[0])
-        angle_from_N_cw = -(angle_from_x_ccw + numpy.pi / 2.) % (2 * numpy.pi)
-        if unit == 'degrees':
-            return 180. / numpy.pi * angle_from_N_cw
-        elif unit == 'radians':
-            return angle_from_N_cw
-        else:
-            raise TypeError("unit must be 'degrees' or 'radians'")
+        Return a boolean the same shape as :func:`links_at_node` which flags
+        links which are downwind of the node as True.
 
-    def hillshade(self, alt=45., az=315., slp=None, asp=None, unit='degrees',
-                  elevs='topographic__elevation'):
+        link_at_node_is_downwind iterates across the grid and identifies the
+        link values at each link connected to a node. It then uses the
+        link_dirs_at_node data structure to identify links carrying flux out of
+        the node. It then return a boolean array the same shape as
+        links_at_node flagging these links. e.g., for a raster, the returned
+        array will be shape (nnodes, 4).
+
+        Parameters
+        ----------
+        values : str or array
+            Name of variable field defined at links, or array of values at
+            links.
+        out : ndarray, optional
+            Buffer to place mapped values into or `None` to create a new array.
+            Must be correct shape and boolean dtype.
+
+        Returns
+        -------
+        ndarray
+            Boolean of which links are downwind at nodes.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid
+
+        >>> rmg = RasterModelGrid((3, 4))
+        >>> rmg.at_link['grad'] = np.array([-1., -2., -1.,
+        ...                                 -2., -3., -4., -5.,
+        ...                                 -1., -2., -1.,
+        ...                                 -1., -2., -3., -4.,
+        ...                                 -1., -2., -1.])
+        >>> rmg.link_at_node_is_downwind('grad')
+        array([[ True,  True, False, False],
+               [ True,  True, False, False],
+               [ True,  True, False, False],
+               [False,  True, False, False],
+               [ True,  True, False, False],
+               [ True,  True, False, False],
+               [ True,  True, False, False],
+               [False,  True, False, False],
+               [ True, False, False, False],
+               [ True, False, False, False],
+               [ True, False, False, False],
+               [False, False, False, False]], dtype=bool)
+
+        LLCATS: LINF NINF CONN
+        """
+        if out is None:
+            out = np.empty_like(self.links_at_node, dtype=bool)
+        else:
+            assert out.shape is self.links_at_node.shape
+            assert out.dtype is bool
+        if type(values) is str:
+            vals = self.at_link[values]
+        else:
+            assert len(values) == self.number_of_links
+            vals = values
+        values_at_links = vals[self.links_at_node] * self.link_dirs_at_node
+        # this procedure makes incoming links NEGATIVE
+        np.greater(values_at_links, 0., out=out)
+
+        return out
+
+    def upwind_links_at_node(self, values, bad_index=-1):
+        """
+        Return an (nnodes, X) shape array of link IDs of which links are upwind
+        of each node, according to *values* (field or array).
+
+        X is the maximum upwind links at any node. Nodes with fewer upwind
+        links than this have additional slots filled with *bad_index*. Links
+        are ordered anticlockwise from east.
+
+        Parameters
+        ----------
+        values : str or array
+            Name of variable field defined at links, or array of values at
+            links.
+        bad_index : int
+            Index to place in array indicating no link.
+
+        Returns
+        -------
+        ndarray
+            Array of upwind link IDs
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid
+
+        >>> rmg = RasterModelGrid((3, 4))
+        >>> rmg.at_link['grad'] = np.array([-1., -2., -1.,
+        ...                                 -2., -3., -4., -5.,
+        ...                                 -1., -2., -1.,
+        ...                                 -1., -2., -3., -4.,
+        ...                                 -1., -2., -1.])
+        >>> rmg.upwind_links_at_node('grad', bad_index=-1)
+        array([[-1, -1],
+               [ 0, -1],
+               [ 1, -1],
+               [ 2, -1],
+               [ 3, -1],
+               [ 7,  4],
+               [ 8,  5],
+               [ 9,  6],
+               [10, -1],
+               [14, 11],
+               [15, 12],
+               [16, 13]])
+
+        LLCATS: LINF NINF CONN
+        """
+        if type(values) is str:
+            vals = self.at_link[values]
+        else:
+            assert len(values) == self.number_of_links
+            vals = values
+        values_at_links = vals[self.links_at_node] * self.link_dirs_at_node
+        # this procedure makes incoming links NEGATIVE
+        unordered_IDs = np.where(values_at_links < 0., self.links_at_node,
+                                 bad_index)
+        bad_IDs = unordered_IDs == bad_index
+        nnodes = self.number_of_nodes
+        flat_sorter = (np.argsort(bad_IDs, axis=1) +
+                       self.links_at_node.shape[1] *
+                       np.arange(nnodes).reshape((nnodes, 1)))
+        big_ordered_array = unordered_IDs.ravel()[flat_sorter].reshape(
+                                self.links_at_node.shape)
+        cols_to_cut = int(bad_IDs.sum(axis=1).min())
+
+        if cols_to_cut > 0:
+            return big_ordered_array[:, :-cols_to_cut]
+        else:
+            return big_ordered_array
+
+    def downwind_links_at_node(self, values, bad_index=-1):
+        """
+        Return an (nnodes, X) shape array of link IDs of which links are
+        downwind of each node, according to *values* (array or field).
+
+        X is the maximum downwind links at any node. Nodes with fewer downwind
+        links than this have additional slots filled with *bad_index*. Links
+        are ordered anticlockwise from east.
+
+        Parameters
+        ----------
+        values : str or array
+            Name of variable field defined at links, or array of values at
+            links.
+        bad_index : int
+            Index to place in array indicating no link.
+
+        Returns
+        -------
+        ndarray
+            Array of upwind link IDs
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid, BAD_INDEX_VALUE
+
+        >>> rmg = RasterModelGrid((3, 4))
+        >>> rmg.at_link['grad'] = np.array([-1., -2., -1.,
+        ...                                 -2., -3., -4., -5.,
+        ...                                 -1., -2., -1.,
+        ...                                 -1., -2., -3., -4.,
+        ...                                 -1., -2., -1.])
+        >>> rmg.downwind_links_at_node('grad', bad_index=BAD_INDEX_VALUE)
+        array([[ 0,  3],
+               [ 1,  4],
+               [ 2,  5],
+               [ 6, -1],
+               [ 7, 10],
+               [ 8, 11],
+               [ 9, 12],
+               [13, -1],
+               [14, -1],
+               [15, -1],
+               [16, -1],
+               [-1, -1]])
+
+        LLCATS: LINF NINF CONN
+        """
+        if type(values) is str:
+            vals = self.at_link[values]
+        else:
+            assert len(values) == self.number_of_links
+            vals = values
+        values_at_links = vals[self.links_at_node] * self.link_dirs_at_node
+        # this procedure makes incoming links NEGATIVE
+        unordered_IDs = np.where(values_at_links > 0., self.links_at_node,
+                                 bad_index)
+        bad_IDs = unordered_IDs == bad_index
+        nnodes = self.number_of_nodes
+        flat_sorter = (np.argsort(bad_IDs, axis=1) +
+                       self.links_at_node.shape[1] *
+                       np.arange(nnodes).reshape((nnodes, 1)))
+        big_ordered_array = unordered_IDs.ravel()[flat_sorter].reshape(
+                                self.links_at_node.shape)
+        cols_to_cut = int(bad_IDs.sum(axis=1).min())
+
+        if cols_to_cut > 0:
+            return big_ordered_array[:, :-cols_to_cut]
+        else:
+            return big_ordered_array
+
+    @property
+    def faces_at_cell(self):
+        """Return array containing face IDs at each cell.
+
+        Creates array if it doesn't already exist.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid, RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5))
+        >>> mg.faces_at_cell
+        array([[ 4,  7,  3,  0],
+               [ 5,  8,  4,  1],
+               [ 6,  9,  5,  2],
+               [11, 14, 10,  7],
+               [12, 15, 11,  8],
+               [13, 16, 12,  9]])
+        >>> mg = HexModelGrid(3, 4)
+        >>> mg.faces_at_cell
+        array([[ 7, 11, 10,  6,  0,  1],
+               [ 8, 13, 12,  7,  2,  3],
+               [ 9, 15, 14,  8,  4,  5]])
+
+        LLCATS: FINF CINF CONN
+        """
+        try:
+            return self._faces_at_cell
+        except AttributeError:
+            self._create_faces_at_cell()
+            return self._faces_at_cell
+
+    def number_of_faces_at_cell(self):
+        """Number of faces attached to each cell.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid
+        >>> hg = HexModelGrid(3, 3)
+        >>> hg.number_of_faces_at_cell()
+        array([6, 6])
+
+        LLCATS: FINF CINF CONN
+        """
+        num_faces_at_cell = np.zeros(self.number_of_cells, dtype=np.int)
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for ln in range(self.number_of_links):
+            cell = self.cell_at_node[node_at_link_tail[ln]]
+            if cell != BAD_INDEX_VALUE:
+                num_faces_at_cell[cell] += 1
+            cell = self.cell_at_node[node_at_link_head[ln]]
+            if cell != BAD_INDEX_VALUE:
+                num_faces_at_cell[cell] += 1
+        return num_faces_at_cell
+
+    def _sort_faces_at_cell_by_angle(self):
+        """Sort the faces_at_cell array by angle.
+
+        Assumes links_at_node and link_dirs_at_node created.
+        """
+        for cell in range(self.number_of_cells):
+            sorted_links = self.links_at_node[self.node_at_cell[cell], :]
+            sorted_faces = self._faces_at_cell[cell, :] = self.face_at_link[
+                sorted_links]
+            self._faces_at_cell[cell, :] = sorted_faces
+
+    def _create_faces_at_cell(self):
+        """Construct faces_at_cell array.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid
+        >>> hg = HexModelGrid(3, 3)
+        >>> hg._create_faces_at_cell()
+        >>> hg._faces_at_cell
+        array([[ 5,  8,  7,  4,  0,  1],
+               [ 6, 10,  9,  5,  2,  3]])
+        """
+        num_faces = self.number_of_faces_at_cell()
+        self._faces_at_cell = np.zeros((self.number_of_cells,
+                                        np.amax(num_faces)), dtype=int)
+        num_faces[:] = 0  # Zero out and count again, to use as index
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for ln in range(self.number_of_links):
+            cell = self.cell_at_node[node_at_link_tail[ln]]
+            if cell != BAD_INDEX_VALUE:
+                self._faces_at_cell[cell, num_faces[cell]] = \
+                    self.face_at_link[ln]
+                num_faces[cell] += 1
+            cell = self.cell_at_node[node_at_link_head[ln]]
+            if cell != BAD_INDEX_VALUE:
+                self._faces_at_cell[cell, num_faces[cell]] = \
+                    self.face_at_link[ln]
+                num_faces[cell] += 1
+        self._sort_faces_at_cell_by_angle()
+
+    @property
+    @make_return_array_immutable
+    def patches_present_at_node(self):
+        """
+        A boolean array, False where a patch has a closed node or is missing.
+
+        The array is the same shape as :func:`patches_at_node`, and is designed
+        to mask it.
+
+        Note that in cases where patches may have more than 3 nodes (e.g.,
+        rasters), a patch is considered still present as long as at least 3
+        open nodes are present.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((3, 3))
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = CLOSED_BOUNDARY
+        >>> mg.patches_at_node
+        array([[ 0, -1, -1, -1],
+               [ 1,  0, -1, -1],
+               [-1,  1, -1, -1],
+               [ 2, -1, -1,  0],
+               [ 3,  2,  0,  1],
+               [-1,  3,  1, -1],
+               [-1, -1, -1,  2],
+               [-1, -1,  2,  3],
+               [-1, -1,  3, -1]])
+        >>> mg.patches_present_at_node
+        array([[ True, False, False, False],
+               [ True,  True, False, False],
+               [False,  True, False, False],
+               [False, False, False,  True],
+               [False, False,  True,  True],
+               [False, False,  True, False],
+               [False, False, False, False],
+               [False, False, False, False],
+               [False, False, False, False]], dtype=bool)
+        >>> 1 in mg.patches_at_node * mg.patches_present_at_node
+        True
+        >>> 2 in mg.patches_at_node * mg.patches_present_at_node
+        False
+
+        LLCATS: PINF NINF
+        """
+        try:
+            return self._patches_present_mask
+        except AttributeError:
+            self.patches_at_node
+            self._reset_patch_status()
+            return self._patches_present_mask
+
+    @property
+    @make_return_array_immutable
+    def patches_present_at_link(self):
+        """
+        A boolean array, False where a patch has a closed node or is missing.
+
+        The array is the same shape as :func:`patches_at_link`, and is designed
+        to mask it.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((3, 3))
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = CLOSED_BOUNDARY
+        >>> mg.patches_at_link
+        array([[ 0, -1],
+               [ 1, -1],
+               [ 0, -1],
+               [ 0,  1],
+               [ 1, -1],
+               [ 0,  2],
+               [ 1,  3],
+               [ 2, -1],
+               [ 2,  3],
+               [ 3, -1],
+               [ 2, -1],
+               [ 3, -1]])
+        >>> mg.patches_present_at_link
+        array([[ True, False],
+               [ True, False],
+               [ True, False],
+               [ True,  True],
+               [ True, False],
+               [ True, False],
+               [ True, False],
+               [False, False],
+               [False, False],
+               [False, False],
+               [False, False],
+               [False, False]], dtype=bool)
+        >>> 1 in mg.patches_at_link * mg.patches_present_at_link
+        True
+        >>> 2 in mg.patches_at_link * mg.patches_present_at_link
+        False
+
+        LLCATS: PINF LINF
+        """
+        try:
+            return self._patches_present_link_mask
+        except AttributeError:
+            self.patches_at_node
+            self._reset_patch_status()
+            return self._patches_present_link_mask
+
+    @property
+    @make_return_array_immutable
+    def number_of_patches_present_at_node(self):
+        """Return the number of patches at a node without a closed node.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((3, 3))
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = CLOSED_BOUNDARY
+        >>> mg.patches_present_at_node
+        array([[ True, False, False, False],
+               [ True,  True, False, False],
+               [False,  True, False, False],
+               [False, False, False,  True],
+               [False, False,  True,  True],
+               [False, False,  True, False],
+               [False, False, False, False],
+               [False, False, False, False],
+               [False, False, False, False]], dtype=bool)
+        >>> mg.number_of_patches_present_at_node
+        array([1, 2, 1, 1, 2, 1, 0, 0, 0])
+
+        LLCATS: PINF NINF BC
+        """
+        try:
+            return self._number_of_patches_present_at_node
+        except AttributeError:
+            self.patches_at_node
+            self._reset_patch_status()
+            return self._number_of_patches_present_at_node
+
+    @property
+    @make_return_array_immutable
+    def number_of_patches_present_at_link(self):
+        """Return the number of patches at a link without a closed node.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((3, 3))
+        >>> mg.status_at_node[mg.nodes_at_top_edge] = CLOSED_BOUNDARY
+        >>> mg.patches_present_at_link
+        array([[ True, False],
+               [ True, False],
+               [ True, False],
+               [ True,  True],
+               [ True, False],
+               [ True, False],
+               [ True, False],
+               [False, False],
+               [False, False],
+               [False, False],
+               [False, False],
+               [False, False]], dtype=bool)
+        >>> mg.number_of_patches_present_at_link
+        array([1, 1, 1, 2, 1, 1, 1, 0, 0, 0, 0, 0])
+
+        LLCATS: PINF LINF BC
+        """
+        try:
+            return self._number_of_patches_present_at_link
+        except AttributeError:
+            self.patches_at_node
+            self._reset_patch_status()
+            return self._number_of_patches_present_at_link
+
+    def _reset_patch_status(self):
+        """
+        Creates the array which stores patches_present_at_node.
+
+        Call whenever boundary conditions are updated on the grid.
+        """
+        from landlab import RasterModelGrid, VoronoiDelaunayGrid
+        node_status_at_patch = self.status_at_node[self.nodes_at_patch]
+        if isinstance(self, RasterModelGrid):
+            max_nodes_at_patch = 4
+        elif isinstance(self, VoronoiDelaunayGrid):
+            max_nodes_at_patch = 3
+        else:
+            max_nodes_at_patch = (self.nodes_at_patch > -1).sum(axis=1)
+        any_node_at_patch_closed = (node_status_at_patch ==
+                                    CLOSED_BOUNDARY).sum(axis=1) > (
+                                        max_nodes_at_patch - 3)
+        absent_patches = any_node_at_patch_closed[self.patches_at_node]
+        bad_patches = numpy.logical_or(absent_patches,
+                                       self.patches_at_node == -1)
+        self._patches_present_mask = numpy.logical_not(
+            bad_patches)
+        self._number_of_patches_present_at_node = numpy.sum(
+            self._patches_present_mask, axis=1)
+        absent_patches = any_node_at_patch_closed[self.patches_at_link]
+        bad_patches = numpy.logical_or(absent_patches,
+                                       self.patches_at_link == -1)
+        self._patches_present_link_mask = numpy.logical_not(
+            bad_patches)
+        self._number_of_patches_present_at_link = numpy.sum(
+            self._patches_present_link_mask, axis=1)
+
+    def calc_hillshade_at_node(self, alt=45., az=315., slp=None, asp=None,
+                               unit='degrees', elevs='topographic__elevation'):
         """Get array of hillshade.
 
         .. codeauthor:: Katy Barnhart <katherine.barnhart@colorado.edu>
@@ -1376,7 +2630,7 @@ class ModelGrid(ModelDataFields):
         alt : float
             Sun altitude (from horizon) - defaults to 45 degrees
         az : float
-            Sun azimuth (from north) - defaults to 315 degrees
+            Sun azimuth (CW from north) - defaults to 315 degrees
         slp : float
             slope of cells at surface - optional
         asp : float
@@ -1403,13 +2657,24 @@ class ModelGrid(ModelDataFields):
         the ArcGIS algorithm: http://help.arcgis.com/en/arcgisdesktop/10.0/
         help/index.html#/How_Hillshade_works/009z000000z2000000/ .
 
-        NB: grid.node_slopes_using_patches() returns slopes as RADIANS. Use
-        caution.
-
         Remember when plotting that bright areas have high values. cmap='Greys'
         will give an apparently inverted color scheme. *cmap='gray'* has white
         associated with the high values, so is recommended for plotting.
 
+        Examples
+        --------
+        >>> import numpy as np
+        >>> from landlab import RasterModelGrid
+
+        >>> mg = RasterModelGrid((5, 5), 1.)
+        >>> z = mg.x_of_node * np.tan(60. * np.pi / 180.)
+        >>> mg.calc_hillshade_at_node(elevs=z, alt=30., az=210.)
+        array([ 0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,
+                0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,
+                0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,  0.625,
+                0.625])
+
+        LLCATS: NINF SURF
         """
         if slp is not None and asp is not None:
             if unit == 'degrees':
@@ -1432,9 +2697,11 @@ class ModelGrid(ModelDataFields):
                 pass
             else:
                 raise TypeError("unit must be 'degrees' or 'radians'")
-            slp, slp_comps = self.node_slopes_using_patches(
-                elevs, unit='radians', return_components=True)
-            asp = self.aspect(slope_component_tuple=slp_comps, unit='radians')
+            slp, slp_comps = self.calc_slope_at_node(
+                elevs, return_components=True)
+
+            asp = self.calc_aspect_at_node(slope_component_tuple=slp_comps,
+                                           unit='radians')
         else:
             raise TypeError('Either both slp and asp must be set, or neither!')
 
@@ -1443,203 +2710,135 @@ class ModelGrid(ModelDataFields):
             numpy.cos(alt) * numpy.sin(slp) * numpy.cos(az - asp)
         )
 
-        return shaded
-
-    def calculate_flux_divergence_at_core_nodes(self, active_link_flux,
-                                                net_unit_flux=None):
-        r"""Get array of flux divergence for core nodes.
-
-        Given an array of fluxes along links, computes the net total flux
-        within each cell, divides by cell area, and stores the result in
-        net_unit_flux.
-
-        The function works by calling calculate_flux_divergence_at_nodes, then
-        slicing out only the values at core nodes. Therefore, it is slower
-        than calculate_flux_divergence_at_nodes, even though it returns a
-        shorter list of numbers.
-
-        The input active_link_flux should be flux of
-        something (e.g., mass, momentum, energy) per unit face width, positive
-        if flowing in the same direction as its link, and negative otherwise.
-        There should be one value per active link. Returns an array of net
-        total flux per unit area, one value per core node (creates this
-        array if it is not given as an argument).
-          By convention, divergence is positive for net outflow, and negative
-        for net outflow. That's why we *add* outgoing flux and *subtract*
-        incoming flux. This makes net_unit_flux have the same sign and
-        dimensions as a typical divergence term in a conservation equation.
-
-        In general, for a polygonal cell with $N$ sides of lengths
-        Li and with surface area A, the net influx divided by cell
-        area would be:
-            .. math::
-
-                {Q_{net} \over A} = {1 \over A} \sum{q_i L_i}
-
-        For a square cell, which is what we have in RasterModelGrid,
-        the sum is over 4 sides of length dx, and
-        :math:`A = dx^2`, so:
-            .. math::
-
-                {Q_{net} \over A} = {1 \over dx} \sum{q_i}
-
-        .. note::
-            The net flux is defined as positive outward, negative
-            inward. In a diffusion problem, for example, one would use:
-                .. math::
-
-                    {du \over dt} = \\text{source} - \\text{fd}
-            where fd is "flux divergence".
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(4, 5, 1.0)
-        >>> u = [0., 1., 2., 3., 0.,
-        ...      1., 2., 3., 2., 3.,
-        ...      0., 1., 2., 1., 2.,
-        ...      0., 0., 2., 2., 0.]
-        >>> u = np.array(u)
-        >>> grad = rmg.calculate_gradients_at_active_links(u)
-        >>> grad
-        array([ 1.,  1., -1., -1., -1., -1., -1.,  0.,  1.,  1.,  1., -1.,  1.,
-                1.,  1., -1.,  1.])
-        >>> flux = -grad    # downhill flux proportional to gradient
-        >>> divflux = rmg.calculate_flux_divergence_at_core_nodes(flux)
-        >>> divflux
-        array([ 2.,  4., -2.,  0.,  1., -4.])
-
-        If calculate_gradients_at_core_nodes is called inside a loop, you can
-        improve speed slightly by creating an array outside the loop. For
-        example, do this once, before the loop:
-
-        >>> divflux = rmg.zeros(centering='core_cell') # outside loop
-
-        Then do this inside the loop:
-
-        >>> divflux = rmg.calculate_flux_divergence_at_core_nodes(
-        ...     flux, divflux)
-
-        In this case, the function will not have to create the divflux array.
-
-        Note this method is untested with looped boundary conditions.
-        """
-
-        if self._DEBUG_TRACK_METHODS:
-            six.print_('ModelGrid.calculate_flux_divergence_at_core_nodes')
-
-        assert (len(active_link_flux) == self.number_of_active_links), \
-            "incorrect length of active_link_flux array"
-
-        # If needed, create net_unit_flux array
-        if net_unit_flux is None:
-            net_unit_flux = numpy.zeros(self.number_of_core_nodes)
-        else:
-            net_unit_flux[:] = 0.
-
-        assert (len(net_unit_flux)) == self.number_of_core_nodes
-
-        node_net_unit_flux = self.calculate_flux_divergence_at_nodes(
-            active_link_flux)
-
-        node_at_core_cell = self.node_at_cell[self.core_cells]
-        net_unit_flux = node_net_unit_flux[node_at_core_cell]
-
-        return net_unit_flux
-
-    @track_this_method
-    def calculate_flux_divergence_at_nodes(self, active_link_flux, out=None):
-        """Flux divergence at nodes.
-
-        Same as calculate_flux_divergence_at_active_cells, but works with and
-        returns a list of net unit fluxes that corresponds to all nodes, rather
-        than just active cells.
-
-        Note that we don't compute net unit fluxes at
-        boundary nodes (which don't have active cells associated with them, and
-        often don't have cells of any kind, because they are on the perimeter),
-        but simply return zeros for these entries. The advantage is that the
-        caller can work with node-based arrays instead of active-cell-based
-        arrays.
-
-        This method is untested with looped boundary conditions.
-        """
-        return gfuncs.calculate_flux_divergence_at_nodes(self,
-                                                         active_link_flux,
-                                                         out=out)
+        return shaded.clip(0.)
 
     @property
     @make_return_array_immutable
-    def cell_areas(self):
-        """Cell areas.
+    def cell_area_at_node(self):
+        """Cell areas in a nnodes-long array.
+
+        Zeros are entered at all perimeter nodes, which lack cells.
 
         Returns
         -------
         ndarray
-            Array of grid-cell areas.
+            Cell areas as an n_nodes-long array.
 
-        Notes
-        -----
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5), spacing=(3, 4))
+        >>> grid.status_at_node[7] = CLOSED_BOUNDARY
+        >>> grid.cell_area_at_node
+        array([  0.,   0.,   0.,   0.,   0.,
+                 0.,  12.,  12.,  12.,   0.,
+                 0.,  12.,  12.,  12.,   0.,
+                 0.,   0.,   0.,   0.,   0.])
 
-        Sometimes it may make sense for a grid to not always calculate
-        its cell areas but, instead, only calculate them once they are
-        required. In such cases, the grid class must implement a
-        _setup_cell_areas_array method, which will be called the first
-        time cell areas are requested.
+        LLCATS: CINF NINF CONN
         """
         try:
-            return self._cell_areas
+            return self._cell_area_at_node
         except AttributeError:
-            return self._setup_cell_areas_array()
+            return self._create_cell_areas_array_force_inactive()
+
+    @property
+    @deprecated(use='width_of_face', version=1.0)
+    def face_width(self):
+        """
+        LLCATS: DEPR FINF MEAS
+        """
+        return self.width_of_face
 
     @property
     @make_return_array_immutable
-    def forced_cell_areas(self):
-        """Cell areas.
+    def width_of_face(self):
+        """Width of grid faces.
 
-        Returns an array of grid cell areas. In the cases of inactive nodes,
-        this method forces the area of those nodes so it can return an nnodes-
-        long array. For a raster, it assumes areas are equal to the normal
-        case.
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, HexModelGrid
+        >>> mg = RasterModelGrid((3, 4), (1., 2.))
+        >>> mg.width_of_face
+        array([ 2.,  2.,  2.,  1.,  1.,  1.,  1.])
+        >>> mg = HexModelGrid(3, 3)
+        >>> np.allclose(mg.width_of_face, 0.57735027)
+        True
 
-        For a voronoi, all cells get their true area. Boundary cells with
-        undefined areas get the mean cell area.
+        LLCATS: FINF MEAS
         """
         try:
-            return self._forced_cell_areas
+            return self._face_width
         except AttributeError:
-            return self._setup_cell_areas_array_force_inactive()
+            return self._create_face_width()
 
-    @property
-    def face_widths(self):
-        """Width of grid faces."""
-        try:
-            return self._face_widths
-        except AttributeError:
-            return self._setup_face_widths()
+    def _create_face_at_link(self):
+        """Set up face_at_link array.
 
-    def _setup_cell_areas_array_force_inactive(self):
+        Examples
+        --------
+        >>> from landlab import HexModelGrid, BAD_INDEX_VALUE
+        >>> hg = HexModelGrid(3, 3)
+
+        >>> face_at_link = hg.face_at_link.copy()
+        >>> face_at_link[face_at_link == BAD_INDEX_VALUE] = -1
+        >>> face_at_link # doctest: +NORMALIZE_WHITESPACE
+        array([-1, -1, -1,  0,  1,  2,  3, -1,  4,  5,  6, -1,  7,  8,  9, 10,
+               -1, -1, -1])
         """
-        Sets up an array of cell areas which is nnodes long. Nodes which have
-        cells receive the area of that cell. Nodes which do not receive
-        numpy.nan entries.
-        Note this method is typically only required for some raster purposes,
-        and is overridden in raster.py. It is unlikely this parent method will
-        ever need to be called.
-        """
-        self._forced_cell_areas = numpy.empty(self.number_of_nodes)
-        mean_cell_area = numpy.mean(self.active_cell_areas)
-        self._forced_cell_areas.fill(mean_cell_area)
-        cell_node_ids = np.where(self.status_at_node != CLOSED_BOUNDARY)[0]
-        try:
-            self._forced_cell_areas[cell_node_ids] = self.cell_areas
-        except AttributeError:
-            # in the case of the Voronoi
-            self._forced_cell_areas[cell_node_ids] = self.active_cell_areas
-        return self._forced_cell_areas
+        self._face_at_link = numpy.full(self.number_of_links, BAD_INDEX_VALUE,
+                                        dtype=int)
+        face_id = 0
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for link in range(self.number_of_links):
+            tc = self.cell_at_node[node_at_link_tail[link]]
+            hc = self.cell_at_node[node_at_link_head[link]]
+            if tc != BAD_INDEX_VALUE or hc != BAD_INDEX_VALUE:
+                self._face_at_link[link] = face_id
+                face_id += 1
 
-    def get_active_link_connecting_node_pair(self, node1, node2):
+        return self._face_at_link
+
+    def _create_link_at_face(self):
+        """Set up link_at_face array.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid
+        >>> hg = HexModelGrid(3, 3)
+        >>> hg.link_at_face
+        array([ 3,  4,  5,  6,  8,  9, 10, 12, 13, 14, 15])
+        """
+        num_faces = len(self.width_of_face)
+        self._link_at_face = numpy.empty(num_faces, dtype=int)
+        face_id = 0
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
+        for link in range(self.number_of_links):
+            tc = self.cell_at_node[node_at_link_tail[link]]
+            hc = self.cell_at_node[node_at_link_head[link]]
+            if tc != BAD_INDEX_VALUE or hc != BAD_INDEX_VALUE:
+                self._link_at_face[face_id] = link
+                face_id += 1
+
+        return self._link_at_face
+
+    def _create_cell_areas_array_force_inactive(self):
+        """Set up an array of cell areas that is n_nodes long.
+
+        Sets up an array of cell areas that is nnodes long. Nodes that have
+        cells receive the area of that cell. Nodes which do not, receive
+        zeros.
+        """
+        _cell_area_at_node_zero = numpy.zeros(self.number_of_nodes,
+                                              dtype=float)
+        _cell_area_at_node_zero[self.node_at_cell] = self.area_of_cell
+        self._cell_area_at_node = _cell_area_at_node_zero
+        return self._cell_area_at_node
+
+    @deprecated(use='no replacement', version=1.0)
+    def active_link_connecting_node_pair(self, node1, node2):
         """Get the active link that connects a pair of nodes.
 
         Returns the ID number of the active link that connects the given pair
@@ -1651,35 +2850,56 @@ class ModelGrid(ModelDataFields):
         Examples
         --------
         >>> import landlab as ll
-        >>> rmg = ll.RasterModelGrid(4, 5)
-        >>> rmg.get_active_link_connecting_node_pair(8, 3)
+        >>> rmg = ll.RasterModelGrid((4, 5))
+        >>> rmg.active_link_connecting_node_pair(8, 3)
         array([2])
+
+        LLCATS: DEPR LINF NINF CONN
         """
         active_link = BAD_INDEX_VALUE
-        for alink in range(0, self.number_of_active_links):
+        fromnode = self.nodes_at_link[self.active_links, 0]
+        tonode = self.nodes_at_link[self.active_links, 1]
+        for alink in range(0, len(self.active_links)):
             link_connects_nodes = (
-                (self.activelink_fromnode[alink] == node1 and
-                 self.activelink_tonode[alink] == node2) or
-                (self.activelink_tonode[alink] == node1 and
-                 self.activelink_fromnode[alink] == node2))
+                (fromnode[alink] == node1 and tonode[alink] == node2) or
+                (tonode[alink] == node1 and fromnode[alink] == node2))
+                # (self._activelink_fromnode[alink] == node1 and
+                #  self._activelink_tonode[alink] == node2) or
+                # (self._activelink_tonode[alink] == node1 and
+                #  self._activelink_fromnode[alink] == node2))
             if link_connects_nodes:
                 active_link = alink
                 break
         return numpy.array([active_link])
 
     @property
-    def active_link_length(self):
-        """Get array of lengths of active links.
+    @make_return_array_immutable
+    def area_of_cell(self):
+        """Get areas of grid cells.
 
-        Returns
-        -------
-        ndarray
-            Lengths of active links, in ID order.
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((4, 5), spacing=(2, 3))
+        >>> grid.area_of_cell # doctest: +NORMALIZE_WHITESPACE
+        array([ 6.,  6.,  6.,
+                6.,  6.,  6.])
+
+        LLCATS: CINF MEAS
         """
-        return self.link_length[self.active_link_ids]
+        return self._area_of_cell
 
     @property
+    @deprecated(use='length_of_link', version=1.0)
     def link_length(self):
+        """
+        LLCATS: DEPR LINF MEAS
+        """
+        return self.length_of_link
+
+    @property
+    @cache_result_in_object()
+    def length_of_link(self):
         """Get lengths of links.
 
         Returns
@@ -1691,46 +2911,27 @@ class ModelGrid(ModelDataFields):
         --------
         >>> from landlab import RasterModelGrid
         >>> grid = RasterModelGrid((4, 5))
-        >>> grid.link_length
+        >>> grid.length_of_link
         array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,
                 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,
                 1.,  1.,  1.,  1.,  1.])
-        >>> len(grid.link_length) == grid.number_of_links
+        >>> len(grid.length_of_link) == grid.number_of_links
         True
+
+        LLCATS: LINF MEAS
         """
-        if self._link_length is None:
-            return self._calculate_link_length()
-        else:
-            return self._link_length
+        return np.sqrt(
+            np.power(np.diff(self.xy_of_node[self.nodes_at_link], axis=1),
+                     2.).sum(axis=2)).flatten()
 
-    def min_active_link_length(self):
-        """Get length of the shortest active link.
-
-        Returns
-        -------
-        float
-            Length of the shortest active link in the grid.
-        """
-        return numpy.amin(self.link_length[self.active_link_ids])
-
-    def max_active_link_length(self):
-        """Get the length of the longest active link.
-
-        Returns
-        -------
-        float
-            Length of the longest active link in the grid.
-        """
-        return numpy.amax(self.link_length[self.active_link_ids])
-
-    def _calculate_link_length(self):
+    def _create_length_of_link(self):
         """Get array of the lengths of all links.
 
         Calculates, returns, and stores as a property of the grid the lengths
         of all the links in the grid.
         """
         if self._link_length is None:
-            self._link_length = self.empty(centering='link', dtype=float)
+            self._link_length = self.empty(at='link', dtype=float)
 
         diff_x = (self.node_x[self.node_at_link_tail] -
                   self.node_x[self.node_at_link_head])
@@ -1740,7 +2941,8 @@ class ModelGrid(ModelDataFields):
 
         return self._link_length
 
-    def assign_upslope_vals_to_active_links(self, u, v=None):
+    @deprecated(use='map_max_of_link_nodes_to_link', version=1.0)
+    def _assign_upslope_vals_to_active_links(self, u, v=None):
         """Assign upslope node value to link.
 
         Assigns to each active link the value of *u* at whichever of its
@@ -1763,26 +2965,28 @@ class ModelGrid(ModelDataFields):
         --------
         >>> from landlab import RasterModelGrid
         >>> import numpy as np
-        >>> grid = RasterModelGrid(3, 3)
+        >>> grid = RasterModelGrid((3, 3))
         >>> u = np.arange(9.)
-        >>> grid.assign_upslope_vals_to_active_links(u)
-        array([ 4.,  7.,  4.,  5.])
+        >>> grid._assign_upslope_vals_to_active_links(u)
+        array([ 4.,  4.,  5.,  7.])
+
+        LLCATS: DEPR NINF LINF CONN
         """
         if v is None:
             v = numpy.array((0., ))
 
-        fv = numpy.zeros(self.number_of_active_links)
+        fv = numpy.zeros(len(self.active_links))
+        fromnode = self.nodes_at_link[self.active_links, 0]
+        tonode = self.nodes_at_link[self.active_links, 1]
         if len(v) < len(u):
-            for i in range(0, self.number_of_active_links):
-                fv[i] = max(u[self.activelink_fromnode[i]],
-                            u[self.activelink_tonode[i]])
+            for i in range(0, len(self.active_links)):
+                fv[i] = max(u[fromnode[i]], u[tonode[i]])
         else:
-            for i in range(0, self.number_of_active_links):
-                if (v[self.activelink_fromnode[i]] >
-                        v[self.activelink_tonode[i]]):
-                    fv[i] = u[self.activelink_fromnode[i]]
+            for i in range(0, len(self.active_links)):
+                if (v[fromnode[i]] > v[tonode[i]]):
+                    fv[i] = u[fromnode[i]]
                 else:
-                    fv[i] = u[self.activelink_tonode[i]]
+                    fv[i] = u[tonode[i]]
         return fv
 
     def _reset_link_status_list(self):
@@ -1804,157 +3008,42 @@ class ModelGrid(ModelDataFields):
         A further test is performed to ensure that the final maps of node and
         link status are internally consistent.
         """
-        if self._DEBUG_TRACK_METHODS:
-            six.print_('ModelGrid._reset_link_status_list')
+        self._activelink_fromnode = self.node_at_link_tail[self.active_links]
+        self._activelink_tonode = self.node_at_link_head[self.active_links]
 
+    def reset_status_at_node(self):
+        attrs = ['_active_link_dirs_at_node', '_status_at_link',
+                 '_active_links', '_fixed_links', '_activelink_fromnode',
+                 '_activelink_tonode', '_active_faces', '_core_nodes',
+                 '_core_cells', '_fixed_links',
+                 '_active_adjacent_nodes_at_node',
+                 '_fixed_value_boundary_nodes', '_node_at_core_cell',
+                 '_link_status_at_node', ]
+
+        for attr in attrs:
+            try:
+                del self.__dict__[attr]
+            except KeyError:
+                pass
         try:
-            already_fixed = self._link_status == FIXED_LINK
+            self.bc_set_code += 1
         except AttributeError:
-            already_fixed = numpy.zeros(self.number_of_links, dtype=bool)
-
-        fromnode_status = self._node_status[self.node_at_link_tail]
-        tonode_status = self._node_status[self.node_at_link_head]
-
-        if not numpy.all((fromnode_status[already_fixed] ==
-                          FIXED_GRADIENT_BOUNDARY) |
-                         (tonode_status[already_fixed] ==
-                          FIXED_GRADIENT_BOUNDARY)):
-            assert numpy.all(np.logical_not((fromnode_status[already_fixed] ==
-                                             CLOSED_BOUNDARY) &
-                                            (tonode_status[already_fixed] ==
-                                             CLOSED_BOUNDARY)))
-            fromnode_status[already_fixed] = numpy.where(
-                (fromnode_status[already_fixed] == CLOSED_BOUNDARY) &
-                (tonode_status[already_fixed] == CORE_NODE),
-                FIXED_GRADIENT_BOUNDARY,
-                fromnode_status[already_fixed])
-            tonode_status[already_fixed] = numpy.where(
-                (tonode_status[already_fixed] == CLOSED_BOUNDARY) &
-                (fromnode_status[already_fixed] == CORE_NODE),
-                FIXED_GRADIENT_BOUNDARY,
-                tonode_status[already_fixed])
-            print("""
-                  Remember, fixed_links are dominant over node statuses.
-                  Your grid may have had an incompatibility between
-                  fixed_links and closed nodes, which has been resolved by
-                  converting the closed nodes to fixed gradient nodes. If
-                  you were trying to deliberately close a node which had
-                  once been set to fixed gradient, you need to open the
-                  links before changing the node statuses. If you were
-                  setting a node to fixed_value, you can ignore this
-                  message.
-                  """)
-
-        active_links = (((fromnode_status == CORE_NODE) & ~
-                         (tonode_status == CLOSED_BOUNDARY)) |
-                        ((tonode_status == CORE_NODE) & ~
-                         (fromnode_status == CLOSED_BOUNDARY)))
-        # ...this still includes things that will become fixed_link
-
-        fixed_links = ((((fromnode_status == FIXED_GRADIENT_BOUNDARY) &
-                         (tonode_status == CORE_NODE)) |
-                        ((tonode_status == FIXED_GRADIENT_BOUNDARY) &
-                         (fromnode_status == CORE_NODE))) |
-                       already_fixed)
-        
-        fixed_link_fixed_val = (((fromnode_status == FIXED_VALUE_BOUNDARY) |
-                                 (tonode_status == FIXED_VALUE_BOUNDARY)) &
-                                already_fixed)                        
-        # these are the "special cases", where the user is probably trying to
-        # adjust an individual fixed_link back to fixed value. We'll allow it:
-        fixed_links[fixed_link_fixed_val] = False
-
+            self.bc_set_code = 0
         try:
-            self._link_status.fill(4)
-        except AttributeError:
-            self._link_status = numpy.empty(self.number_of_links, dtype=int)
-            self._link_status.fill(4)
-
-        self._link_status[active_links] = 0
-
-        self._link_status[fixed_links] = 2
-
-        active_links = self._link_status == 0  # now it's correct
-        (self.active_link_ids, ) = numpy.where(active_links)
-        (self.fixed_link_ids, ) = numpy.where(fixed_links)
-        self.active_link_ids = as_id_array(self.active_link_ids)
-        self.fixed_link_ids = as_id_array(self.fixed_link_ids)
-
-        self._num_active_links = (active_links).sum()
-        self._num_active_faces = self._num_active_links
-        self._num_fixed_links = fixed_links.sum()
-        self._num_fixed_faces = self._num_fixed_links
-        self.activelink_fromnode = self.node_at_link_tail[active_links]
-        self.activelink_tonode = self.node_at_link_head[active_links]
-
-        # Set up active inlink and outlink matrices
-        self._setup_active_inlink_and_outlink_matrices()
-
-    def _reset_lists_of_nodes_cells(self):
-        """Create of reset lists of nodes and cells based on their status.
-
-        Creates or resets various lists of nodes and cells based on their
-        statuses. Call this function whenever you make changes to the
-        boundary conditions in the grid.
-        The updated attributes and arrays are:
-        * _num_active_nodes
-        * _num_active_cells
-        * _num_core_nodes
-        * _num_core_cells
-        * activecell_node *
-        * corecell_node *
-        * active_cells
-        * core_cells
-        * _boundary_nodes
-
-        Examples
-        --------
-        >>> import landlab
-        >>> grid = landlab.RasterModelGrid((4, 5))
-        >>> grid.status_at_node[7] = landlab.CLOSED_BOUNDARY
-        >>> grid.core_cells
-        array([0, 2, 3, 4, 5])
-        """
-        (self._core_nodes, ) = numpy.where(self._node_status == CORE_NODE)
-        self._num_core_nodes = self._core_nodes.size
-
-        self._core_cells = self.cell_at_node[self._core_nodes]
-        self._num_core_cells = self._core_cells.size
-
-        self._boundary_nodes = as_id_array(
-            numpy.where(self._node_status != CORE_NODE)[0])
-
-    def update_links_nodes_cells_to_new_BCs(self):
-        """Update grid element connectivity, status.
-
-        This method updates all of the various lists and attributes governed
-        by node status (e.g., core nodes, active links, etc) when you change
-        node statuses. Call it if your method or driver makes changes to the
-        boundary conditions of nodes in the grid.
-        """
-        self._reset_link_status_list()
-        self._reset_lists_of_nodes_cells()
-        try:
-            if self.diagonal_list_created:
-                self.diagonal_list_created = False
-        except AttributeError:
+            del self.__dict__['__node_active_inlink_matrix']
+        except KeyError:
             pass
         try:
-            if self.neighbor_list_created:
-                self.neighbor_list_created = False
-        except AttributeError:
+            del self.__dict__['__node_active_outlink_matrix']
+        except KeyError:
             pass
 
-    @deprecated
+    @deprecated(use='set_nodata_nodes_to_closed', version='0.2')
     def set_nodata_nodes_to_inactive(self, node_data, nodata_value):
         """Make no-data nodes inactive.
 
         Set the status to CLOSED_BOUNDARY for all nodes whose value
         of node_data is equal to the nodata_value.
-
-        .. note:: Deprecated since version 0.6.
-            Deprecated due to out of date terminology;
-            use :func:`set_nodata_nodes_to_closed` instead.
 
         Parameters
         ----------
@@ -1967,14 +3056,21 @@ class ModelGrid(ModelDataFields):
         --------
         >>> import numpy as np
         >>> from landlab import RasterModelGrid
-        >>> mg = RasterModelGrid(3, 4, 1.0)
+        >>> mg = RasterModelGrid((3, 4), 1.0)
         >>> mg.status_at_node
-        array([1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1], dtype=int8)
-        >>> h = np.array([-9999, -9999, -9999, -9999, -9999, -9999, 12345.,
-        ...     0., -9999, 0., 0., 0.])
+        array([1, 1, 1, 1,
+               1, 0, 0, 1,
+               1, 1, 1, 1], dtype=uint8)
+        >>> h = np.array([-9999, -9999, -9999, -9999,
+        ...               -9999, -9999, 12345.,   0.,
+        ...               -9999,    0.,     0.,   0.])
         >>> mg.set_nodata_nodes_to_inactive(h, -9999)
         >>> mg.status_at_node
-        array([4, 4, 4, 4, 4, 4, 0, 1, 4, 1, 1, 1], dtype=int8)
+        array([4, 4, 4, 4,
+               4, 4, 0, 1,
+               4, 1, 1, 1], dtype=uint8)
+
+        LLCATS: DEPR NINF BC
         """
         self.set_nodata_nodes_to_closed(node_data, nodata_value)
 
@@ -2021,22 +3117,21 @@ class ModelGrid(ModelDataFields):
 
         >>> import numpy as np
         >>> import landlab as ll
-        >>> mg = ll.RasterModelGrid(3, 4, 1.0)
+        >>> mg = ll.RasterModelGrid((3, 4), 1.0)
         >>> mg.status_at_node
-        array([1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1], dtype=int8)
+        array([1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1], dtype=uint8)
         >>> h = np.array([-9999, -9999, -9999, -9999, -9999, -9999, 12345.,
         ...     0., -9999, 0., 0., 0.])
         >>> mg.set_nodata_nodes_to_closed(h, -9999)
         >>> mg.status_at_node
-        array([4, 4, 4, 4, 4, 4, 0, 1, 4, 1, 1, 1], dtype=int8)
+        array([4, 4, 4, 4, 4, 4, 0, 1, 4, 1, 1, 1], dtype=uint8)
+
+        LLCATS: BC NINF
         """
         # Find locations where value equals the NODATA code and set these nodes
         # as inactive boundaries.
         nodata_locations = numpy.nonzero(node_data == nodata_value)
-        self._node_status[nodata_locations] = CLOSED_BOUNDARY
-
-        # Recreate the list of active cell IDs
-        self.update_links_nodes_cells_to_new_BCs()
+        self.status_at_node[nodata_locations] = CLOSED_BOUNDARY
 
     def set_nodata_nodes_to_fixed_gradient(self, node_data, nodata_value):
         """Make no-data nodes fixed gradient boundaries.
@@ -2089,14 +3184,14 @@ class ModelGrid(ModelDataFields):
 
         >>> import numpy as np
         >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(4, 9)
+        >>> rmg = RasterModelGrid((4, 9))
         >>> rmg.status_at_node # doctest: +NORMALIZE_WHITESPACE
         array([1, 1, 1, 1, 1, 1, 1, 1, 1,
                1, 0, 0, 0, 0, 0, 0, 0, 1,
                1, 0, 0, 0, 0, 0, 0, 0, 1,
-               1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=int8)
+               1, 1, 1, 1, 1, 1, 1, 1, 1], dtype=uint8)
 
-        >>> z = rmg.create_node_array_zeros()
+        >>> z = rmg.zeros(at='node')
         >>> z = np.array([
         ...     -99., -99., -99., -99., -99., -99., -99., -99., -99.,
         ...     -99., -99., -99.,   0.,   0.,   0.,   0.,   0., -99.,
@@ -2108,25 +3203,22 @@ class ModelGrid(ModelDataFields):
         array([2, 2, 2, 2, 2, 2, 2, 2, 2,
                2, 2, 2, 0, 0, 0, 0, 0, 2,
                2, 2, 2, 0, 0, 0, 0, 0, 2,
-               2, 2, 2, 2, 2, 2, 2, 2, 2], dtype=int8)
+               2, 2, 2, 2, 2, 2, 2, 2, 2], dtype=uint8)
 
         >>> rmg.status_at_link # doctest: +NORMALIZE_WHITESPACE
-        array([4, 4, 4, 2, 2, 2, 2, 2, 4,
-               4, 4, 4, 0, 0, 0, 0, 0, 4,
-               4, 4, 4, 2, 2, 2, 2, 2, 4,
-               4, 4, 4, 4, 4, 4, 4, 4,
-               4, 4, 2, 0, 0, 0, 0, 2,
-               4, 4, 2, 0, 0, 0, 0, 2,
-               4, 4, 4, 4, 4, 4, 4, 4])
+        array([4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 4,
+               4, 4, 2, 0, 0, 0, 0, 2, 4, 4, 4, 0, 0, 0, 0, 0, 4,
+               4, 4, 2, 0, 0, 0, 0, 2, 4, 4, 4, 2, 2, 2, 2, 2, 4,
+               4, 4, 4, 4, 4, 4, 4, 4], dtype=uint8)
+
+        LLCATS: BC NINF
         """
         # Find locations where value equals the NODATA code and set these nodes
         # as inactive boundaries.
         nodata_locations = numpy.nonzero(node_data == nodata_value)
-        self._node_status[nodata_locations] = FIXED_GRADIENT_BOUNDARY
+        self.status_at_node[nodata_locations] = FIXED_GRADIENT_BOUNDARY
 
-        # Recreate the list of active cell IDs
-        self.update_links_nodes_cells_to_new_BCs()
-
+    @deprecated(use='map_max_of_link_nodes_to_link', version=1.0)
     def max_of_link_end_node_values(self, node_data):
         """Maximum value at the end of links.
 
@@ -2148,16 +3240,29 @@ class ModelGrid(ModelDataFields):
         Examples
         --------
         >>> import numpy as np
-        >>> import landlab as ll
-        >>> mg = ll.RasterModelGrid(3, 4, 1.0)
-        >>> h = np.array([2.,2.,8.,0.,8.,0.,3.,0.,5.,6.,8.,3.])
-        >>> mg.max_of_link_end_node_values(h)
-        array([ 2.,  8.,  6.,  8.,  8.,  3.,  3.])
-        """
-        return numpy.maximum(node_data[self.activelink_fromnode],
-                             node_data[self.activelink_tonode])
+        >>> from landlab import RasterModelGrid
 
-    def calculate_numbers_of_node_neighbors(self):
+        >>> grid = RasterModelGrid((3, 4), spacing=(1., 1.))
+        >>> h = np.array([ 2., 2., 8., 0.,
+        ...                8., 0., 3., 0.,
+        ...                5., 6., 8., 3.])
+
+        >>> grid.max_of_link_end_node_values(h)
+        array([ 2.,  8.,  8.,  3.,  3.,  6.,  8.])
+
+        Note that this method is *deprecatd*. The alternative is to use
+        ``map_max_of_link_nodes_to_link``.
+
+        >>> vals = grid.map_max_of_link_nodes_to_link(h)
+        >>> vals[grid.active_links]
+        array([ 2.,  8.,  8.,  3.,  3.,  6.,  8.])
+
+        LLCATS: DEPR LINF NINF CONN
+        """
+        return np.max(node_data[self.nodes_at_link[self.active_links]],
+                      axis=1)
+
+    def _calc_numbers_of_node_neighbors(self):
         """Number of neighbor nodes.
 
         Calculates the number of neighboring nodes for each node, and returns
@@ -2171,166 +3276,14 @@ class ModelGrid(ModelDataFields):
         neighbors for both the endpoint nodes.
         """
         num_nbrs = numpy.zeros(self.number_of_nodes, dtype=int)
+        node_at_link_tail = self.node_at_link_tail
+        node_at_link_head = self.node_at_link_head
         for link in range(self.number_of_links):
-            num_nbrs[self.node_at_link_tail[link]] += 1
-            num_nbrs[self.node_at_link_head[link]] += 1
+            num_nbrs[node_at_link_tail[link]] += 1
+            num_nbrs[node_at_link_head[link]] += 1
         return num_nbrs
 
-    def _setup_inlink_and_outlink_matrices(self):
-        """Create data structured for number of inlinks and outlinks.
-
-        Creates data structures to record the numbers of inlinks and outlinks
-        for each node. An inlink of a node is simply a link that has the
-        node as its "to" node, and an outlink is a link that has the node
-        as its "from".
-
-        We store the inlinks in an NM-row by num_nodes-column matrix called
-        node_inlink_matrix. NM is the maximum number of neighbors for any node.
-
-        We also keep track of the total number of inlinks and outlinks at each
-        node in the num_inlinks and num_outlinks arrays.
-
-        The inlink and outlink matrices are useful in numerical calculations.
-        Each row of each matrix contains one inlink or outlink per node. So, if
-        you have a corresponding "flux" matrix, you can map incoming or
-        outgoing fluxes onto the appropriate nodes. More information on this is
-        in the various calculate_flux_divergence... functions.
-
-        What happens if a given node does not have two inlinks or outlinks? We
-        simply put the default value -1 in this case. This allows us to use a
-        cute little trick when computing inflows and outflows. We make our
-        "flux" array one element longer than the number of links, with the last
-        element containing the value 0. Thus, any time we add an influx from
-        link number -1, Python takes the value of the last element in the
-        array, which is zero. By doing it this way, we maintain the efficiency
-        that comes with the use of numpy. Again, more info can be found in the
-        description of the flux divergence functions.
-        """
-
-        # Find the maximum number of neighbors for any node
-        num_nbrs = self.calculate_numbers_of_node_neighbors()
-        self.max_num_nbrs = numpy.amax(num_nbrs)
-
-        # Create active in-link and out-link matrices.
-        self.node_inlink_matrix = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-        self.node_outlink_matrix = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-
-        # Set up the inlink arrays
-        tonodes = self.node_at_link_head
-        self.node_numinlink = numpy.bincount(tonodes,
-                                             minlength=self.number_of_nodes)
-
-        counts = count_repeated_values(self.node_at_link_head)
-        for (count, (tonodes, link_ids)) in enumerate(counts):
-            self.node_inlink_matrix[count][tonodes] = link_ids
-
-        # Set up the outlink arrays
-        fromnodes = self.node_at_link_tail
-        self.node_numoutlink = numpy.bincount(fromnodes,
-                                              minlength=self.number_of_nodes)
-        counts = count_repeated_values(self.node_at_link_tail)
-        for (count, (fromnodes, link_ids)) in enumerate(counts):
-            self.node_outlink_matrix[count][fromnodes] = link_ids
-
-    def _setup_active_inlink_and_outlink_matrices(self):
-        """Create data structures for number of active inlinks and outlinks.
-
-        Creates data structures to record the numbers of active inlinks and
-        active outlinks for each node. These data structures are equivalent to
-        the "regular" inlink and outlink matrices, except that it uses the IDs
-        of active links (only).
-
-        Examples
-        --------
-        >>> from landlab import HexModelGrid
-        >>> hg = HexModelGrid(3, 2)
-        >>> hg.node_numactiveinlink
-        array([1, 1, 1, 0, 1, 1, 1])
-        >>> hg.node_active_inlink_matrix2
-        array([[ 3,  5,  2, -1,  4,  1,  0],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1],
-               [-1, -1, -1, -1, -1, -1, -1]])
-        >>> hg.node_numactiveoutlink
-        array([0, 0, 0, 6, 0, 0, 0])
-        >>> hg.node_active_outlink_matrix2
-        array([[-1, -1, -1,  0, -1, -1, -1],
-               [-1, -1, -1,  1, -1, -1, -1],
-               [-1, -1, -1,  2, -1, -1, -1],
-               [-1, -1, -1,  3, -1, -1, -1],
-               [-1, -1, -1,  4, -1, -1, -1],
-               [-1, -1, -1,  5, -1, -1, -1]])
-        """
-        # Create active in-link and out-link matrices.
-        self.node_active_inlink_matrix = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-        self.node_active_outlink_matrix = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-
-        # Set up the inlink arrays
-        tonodes = self.activelink_tonode
-        self.node_numactiveinlink = as_id_array(numpy.bincount(
-            tonodes, minlength=self.number_of_nodes))
-
-        counts = count_repeated_values(self.activelink_tonode)
-        for (count, (tonodes, active_link_ids)) in enumerate(counts):
-            self.node_active_inlink_matrix[count][tonodes] = active_link_ids
-
-        # Set up the outlink arrays
-        fromnodes = self.activelink_fromnode
-        self.node_numactiveoutlink = as_id_array(numpy.bincount(
-            fromnodes, minlength=self.number_of_nodes))
-        counts = count_repeated_values(self.activelink_fromnode)
-        for (count, (fromnodes, active_link_ids)) in enumerate(counts):
-            self.node_active_outlink_matrix[count][fromnodes] = active_link_ids
-
-        # THE FOLLOWING IS MEANT TO REPLACE THE ABOVE CODE, USING LINK IDS
-        # FOR ACTIVE LINKS (ONLY), INSTEAD OF "ACTIVE LINK IDS". THE POINT IS
-        # TO HAVE JUST ONE ID/NUMBERING SYSTEM FOR LINKS, RATHER THAN A
-        # SEPARATE NUMBERING SYSTEM FOR ACTIVE LINKS
-        # GT JUNE 2015
-        # TODO: CLEAN THIS UP
-
-        # Create AN ALTERNATIVE VERSION OF active in-link and out-link
-        # matrices, WHICH WILL EVENTUALLY REPLACE THE ONE ABOVE (AND BE
-        # RENAMED TO GET RID OF THE "2")
-        # TODO: MAKE THIS CHANGE ONCE CODE THAT USES IT HAS BEEN PREPPED
-        self.node_active_inlink_matrix2 = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-        self.node_active_outlink_matrix2 = - numpy.ones(
-            (self.max_num_nbrs, self.number_of_nodes), dtype=numpy.int)
-
-        # Set up the inlink arrays
-        tonodes = self.node_at_link_head[self.active_links]
-        self.node_numactiveinlink = as_id_array(numpy.bincount(
-            tonodes, minlength=self.number_of_nodes))
-
-        # OK, HERE WE HAVE TO MAKE A CHANGE, BECAUSE THE INDICES RETURNED BY
-        # count_repeated_values ARE "ACTIVE LINK INDICES", WHICH WE ARE NO
-        # LONGER USING. HAVE TO TURN THESE BACK INTO LINK IDS. I THINK WE CAN
-        # DO THIS BY CHANGING active_link_ids TO
-        # self.active_links[active_link_ids] BUT HAVEN'T MADE THIS CHANGE YET.
-        # NEED TO WORK THROUGH EXAMPLE 3,2 HMG
-        counts = count_repeated_values(
-            self.node_at_link_head[self.active_links])
-        for (count, (tonodes, active_link_ids)) in enumerate(counts):
-            self.node_active_inlink_matrix2[count][
-                tonodes] = self.active_links[active_link_ids]
-
-        # Set up the outlink arrays
-        fromnodes = self.node_at_link_tail[self.active_links]
-        self.node_numactiveoutlink = as_id_array(numpy.bincount(
-            fromnodes, minlength=self.number_of_nodes))
-        counts = count_repeated_values(self.activelink_fromnode)
-        for (count, (fromnodes, active_link_ids)) in enumerate(counts):
-            self.node_active_outlink_matrix2[count][
-                fromnodes] = self.active_links[active_link_ids]
-
-    def _make_link_unit_vectors(self):
+    def _create_link_unit_vectors(self):
         """Make arrays to store the unit vectors associated with each link.
 
         Creates self.link_unit_vec_x and self.link_unit_vec_y. These contain,
@@ -2373,124 +3326,125 @@ class ModelGrid(ModelDataFields):
 
         >>> import landlab as ll
         >>> hmg = ll.HexModelGrid(3, 2, 2.0)
-        >>> hmg.link_unit_vec_x # doctest: +NORMALIZE_WHITESPACE
-        array([ 0.5, -0.5, -1. , -0.5,  1. ,  0.5,  0.5, -1. , -0.5,  0.5,
-                1. , -0.5,  0. ])
-        >>> hmg.link_unit_vec_y
-        array([ 0.8660254,  0.8660254,  0.       , -0.8660254,  0.       ,
-               -0.8660254, -0.8660254,  0.       , -0.8660254, -0.8660254,
-                0.       , -0.8660254,  0.       ])
-        >>> hmg.node_unit_vector_sum_x
+        >>> hmg.unit_vector_at_link[:, 0] # doctest: +NORMALIZE_WHITESPACE
+        array([ 1. , -0.5,  0.5, -0.5,  0.5,  1. ,  1. ,  0.5, -0.5,  0.5, -0.5,
+                1. ])
+        >>> hmg.unit_vector_at_link[:, 1]
+        array([ 0.       ,  0.8660254,  0.8660254,  0.8660254,  0.8660254,
+                0.       ,  0.       ,  0.8660254,  0.8660254,  0.8660254,
+                0.8660254,  0.       ])
+        >>> hmg.unit_vector_at_node[:, 0]
         array([ 2.,  2.,  2.,  4.,  2.,  2.,  2.])
-        >>> hmg.node_unit_vector_sum_y
+        >>> hmg.unit_vector_at_node[:, 1]
         array([ 1.73205081,  1.73205081,  1.73205081,  3.46410162,  1.73205081,
                 1.73205081,  1.73205081])
         """
-        # Create the arrays for unit vectors for each link. These each get an
-        # additional array element at the end with the value zero. This allows
-        # any references to "link ID -1" in the node_inlink_matrix and
-        # node_outlink_matrix to refer to the zero value in this extra element,
-        # so that when we're summing up link unit vectors, or multiplying by a
-        # nonexistent unit vector, we end up just treating these as zero.
-        self._link_unit_vec_x = numpy.zeros(self.number_of_links + 1)
-        self._link_unit_vec_y = numpy.zeros(self.number_of_links + 1)
+        nodes_at_link = ((self.node_at_link_tail, self.node_at_link_head), )
 
-        # Calculate the unit vectors using triangle similarity and the
-        # Pythagorean Theorem.
-        dx = self.node_x[self.node_at_link_head] - \
-            self.node_x[self.node_at_link_tail]
-        dy = self.node_y[self.node_at_link_head] - \
-            self.node_y[self.node_at_link_tail]
-        self._link_unit_vec_x[:self.number_of_links] = dx / self.link_length
-        self._link_unit_vec_y[:self.number_of_links] = dy / self.link_length
+        unit_vec_at_link = np.zeros((self.number_of_links + 1, 2), dtype=float)
+        unit_vec_at_link[:-1, 0] = np.diff(self.x_of_node[nodes_at_link],
+                                           axis=0) / self.length_of_link
+        unit_vec_at_link[:-1, 1] = np.diff(self.y_of_node[nodes_at_link],
+                                           axis=0) / self.length_of_link
 
-        # While we're at it, calculate the unit vector sums for each node.
-        # These will be useful in averaging link-based vectors at the nodes.
-        self._node_unit_vector_sum_x = numpy.zeros(self.number_of_nodes)
-        self._node_unit_vector_sum_y = numpy.zeros(self.number_of_nodes)
-        max_num_inlinks_per_node = numpy.size(self.node_inlink_matrix, 0)
-        for i in range(max_num_inlinks_per_node):
-            self._node_unit_vector_sum_x += abs(
-                self._link_unit_vec_x[self.node_inlink_matrix[i, :]])
-            self._node_unit_vector_sum_y += abs(
-                self._link_unit_vec_y[self.node_inlink_matrix[i, :]])
-            self._node_unit_vector_sum_x += abs(
-                self._link_unit_vec_x[self.node_outlink_matrix[i, :]])
-            self._node_unit_vector_sum_y += abs(
-                self._link_unit_vec_y[self.node_outlink_matrix[i, :]])
+        self._unit_vec_at_node = np.abs(unit_vec_at_link[self.links_at_node]).sum(axis=1)
+        self._unit_vec_at_link = unit_vec_at_link[:-1, :]
 
     @property
-    def link_unit_vec_x(self):
-        """Get array of x-component of unit vector for links.
+    def unit_vector_at_link(self):
+        """Get a unit vector for each link.
 
         Examples
         --------
         >>> from landlab import RasterModelGrid
         >>> grid = RasterModelGrid((3, 3))
-        >>> len(grid.link_unit_vec_x) == grid.number_of_links + 1
-        True
-        >>> grid.link_unit_vec_x # doctest: +NORMALIZE_WHITESPACE
-        array([ 0.,  0.,  0.,  0.,  0.,  0.,
-                1.,  1.,  1.,  1.,  1.,  1.,  0.])
+        >>> grid.unit_vector_at_link # doctest: +NORMALIZE_WHITESPACE
+        array([[ 1.,  0.],
+               [ 1.,  0.],
+               [ 0.,  1.],
+               [ 0.,  1.],
+               [ 0.,  1.],
+               [ 1.,  0.],
+               [ 1.,  0.],
+               [ 0.,  1.],
+               [ 0.,  1.],
+               [ 0.,  1.],
+               [ 1.,  0.],
+               [ 1.,  0.]])
+
+        LLCATS: LINF MEAS
         """
-        if self._link_unit_vec_x is None:
-            self._make_link_unit_vectors()
-        return self._link_unit_vec_x
+        try:
+            self._unit_vec_at_link
+        except AttributeError:
+            self._create_link_unit_vectors()
+        finally:
+            return self._unit_vec_at_link
 
     @property
-    def link_unit_vec_y(self):
-        """Get array of y-component of unit vector for links.
+    def unit_vector_at_node(self):
+        """Get a unit vector for each node.
 
         Examples
         --------
         >>> from landlab import RasterModelGrid
         >>> grid = RasterModelGrid((3, 3))
-        >>> len(grid.link_unit_vec_y) == grid.number_of_links + 1
-        True
-        >>> grid.link_unit_vec_y # doctest: +NORMALIZE_WHITESPACE
-        array([ 1.,  1.,  1.,  1.,  1.,  1.,
-                0.,  0.,  0.,  0.,  0.,  0.,  0.])
+        >>> grid.unit_vector_at_node # doctest: +NORMALIZE_WHITESPACE
+        array([[ 1.,  1.],
+               [ 2.,  1.],
+               [ 1.,  1.],
+               [ 1.,  2.],
+               [ 2.,  2.],
+               [ 1.,  2.],
+               [ 1.,  1.],
+               [ 2.,  1.],
+               [ 1.,  1.]])
+
+        LLCATS: LINF MEAS
         """
-        if self._link_unit_vec_y is None:
-            self._make_link_unit_vectors()
-        return self._link_unit_vec_y
+        try:
+            self._unit_vec_at_node
+        except AttributeError:
+            self._create_link_unit_vectors()
+        finally:
+            return self._unit_vec_at_node
 
     @property
-    def node_unit_vector_sum_x(self):
+    def unit_vector_sum_xcomponent_at_node(self):
         """Get array of x-component of unit vector sums at each node.
 
         Examples
         --------
         >>> from landlab import RasterModelGrid
         >>> grid = RasterModelGrid((3, 3))
-        >>> len(grid.node_unit_vector_sum_x) == grid.number_of_nodes
+        >>> len(grid.unit_vector_sum_xcomponent_at_node) == grid.number_of_nodes
         True
-        >>> grid.node_unit_vector_sum_x
+        >>> grid.unit_vector_sum_xcomponent_at_node
         array([ 1.,  2.,  1.,  1.,  2.,  1.,  1.,  2.,  1.])
+
+        LLCATS: NINF MEAS
         """
-        if self._node_unit_vector_sum_x is None:
-            self._make_link_unit_vectors()
-        return self._node_unit_vector_sum_x
+        return self.unit_vector_at_node[:, 0]
 
     @property
-    def node_unit_vector_sum_y(self):
+    def unit_vector_sum_ycomponent_at_node(self):
         """Get array of y-component of unit vector sums at each node.
 
         Examples
         --------
         >>> from landlab import RasterModelGrid
         >>> grid = RasterModelGrid((3, 3))
-        >>> len(grid.node_unit_vector_sum_y) == grid.number_of_nodes
+        >>> len(grid.unit_vector_sum_ycomponent_at_node) == grid.number_of_nodes
         True
-        >>> grid.node_unit_vector_sum_y
+        >>> grid.unit_vector_sum_ycomponent_at_node
         array([ 1.,  1.,  1.,  2.,  2.,  2.,  1.,  1.,  1.])
+
+        LLCATS: NINF MEAS
         """
-        if self._node_unit_vector_sum_y is None:
-            self._make_link_unit_vectors()
-        return self._node_unit_vector_sum_y
+        return self.unit_vector_at_node[:, 1]
 
     def map_link_vector_to_nodes(self, q):
-        r"""Map data defined on links to nodes.
+        """Map data defined on links to nodes.
 
         Given a variable defined on links, breaks it into x and y components
         and assigns values to nodes by averaging each node's attached links.
@@ -2508,7 +3462,7 @@ class ModelGrid(ModelDataFields):
 
         See Also
         --------
-        _make_link_unit_vectors : sets up unit vectors at links and unit-vector
+        _create_link_unit_vectors : sets up unit vectors at links and unit-vector
                                   sums at nodes
 
         Notes
@@ -2524,7 +3478,7 @@ class ModelGrid(ModelDataFields):
         x- and y-components according to each link's unit vector. The
         x-component of q at a node is a weighted sum of the x-components of the
         links that are attached to that node. A good way to appreciate this
-        is by example. Consider a 3x4 raster grid:
+        is by example. Consider a 3x4 raster grid::
 
             8--14---9--15--10--16--11
             |       |       |       |
@@ -2542,14 +3496,14 @@ class ModelGrid(ModelDataFields):
         all the y components. Here's what that would look like for the above
         grid ("vsx" and "vsy" stand for "vector sum x" and "vector sum y"):
 
-            Corner nodes (0, 3, 8, 11): vsx = 1, vsy = 1
-            Bottom and top nodes (1-2, 9-10): vsx = 2, vsy = 1
-            Left and right nodes (4, 7): vsx = 1, vsy = 2
-            All others: vsx = 2, vsy = 2
+        *  Corner nodes (0, 3, 8, 11): vsx = 1, vsy = 1
+        *  Bottom and top nodes (1-2, 9-10): vsx = 2, vsy = 1
+        *  Left and right nodes (4, 7): vsx = 1, vsy = 2
+        *  All others: vsx = 2, vsy = 2
 
         The process of creating unit-vector sums at nodes is handled by
-        ModelGrid._make_link_unit_vectors() (and, for raster grids, by the
-        overriding method RasterModelGrid._make_link_unit_vectors()). The node
+        ModelGrid._create_link_unit_vectors() (and, for raster grids, by the
+        overriding method RasterModelGrid._create_link_unit_vectors()). The node
         unit-vector sums are then stored in self.node_unit_vector_sum_x and
         self.node_unit_vector_sum_y.
 
@@ -2561,15 +3515,13 @@ class ModelGrid(ModelDataFields):
         components at a link, and :math:`(S_x,S_y)` represents the unit-vector
         sum at a given node.
 
-        ..math::
+        .. math::
 
             U_i = \sum_{j=1}^{L_i} q_j m_j / S_{xi}
             V_i = \sum_{j=1}^{L_i} q_j n_j / S_{yi}
 
         Suppose that the vector q is uniform and equal to one.
-        Then, at node 0 in the above grid, this works out to:
-
-        ..math::
+        Then, at node 0 in the above grid, this works out to::
 
             U_0 = (q_0 m_0) / 1 + (q_8 m_8) / 1 = (1 0)/ 1 + (1 1)/1 = 1
             V_0 = (q_0 n_0) / 1 + (q_8 n_8) / 1 = (1 1) / 1 + (1 0) / 1 = 1
@@ -2579,9 +3531,7 @@ class ModelGrid(ModelDataFields):
         is 2 because there are two horizontal links, each with an x- unit
         vector value of unity.  The y-vector sum is 1 because only one of the
         three (link #1) has a non-zero y component (equal to one). Here is
-        how the numbers work out:
-
-        ..math::
+        how the numbers work out::
 
             U_1 = (q_1 m_1) / 2 + (q_8 m_8) / 2 + (q_9 m_9) / 2
                 = (1 0) / 2 + (1 1) / 2 + (1 1) / 2 = 1
@@ -2590,54 +3540,85 @@ class ModelGrid(ModelDataFields):
 
         At node 5, in the interior, there are four connected links (two
         in-links and two out-links; two horizontal and two vertical). So, we
-        add up the q values associated with all four:
+        add up the q values associated with all four::
 
-        U_5 = (q_1 m_1) / 2 + (q_5 m_5) / 2 + (q_11 m_11) / 2 + (q_12 m_12) / 2
-            = (1 0) / 2 + (1 0) / 2 + (1 1) / 2 + (1 1) / 2 = 1
+            U_5 = (q_1 m_1) / 2 + (q_5 m_5) / 2 + (q_11 m_11) / 2 + (q_12 m_12) / 2
+                = (1 0) / 2 + (1 0) / 2 + (1 1) / 2 + (1 1) / 2 = 1
 
-        V_5 = (q_1 n_1) / 2 + (q_5 n_5) / 2 + (q_11 n_11) / 2 + (q_12 n_12) / 2
-            = (1 1) / 2 + (1 1) / 2 + (1 0) / 2 + (1 0) / 2 = 1
+            V_5 = (q_1 n_1) / 2 + (q_5 n_5) / 2 + (q_11 n_11) / 2 + (q_12 n_12) / 2
+                = (1 1) / 2 + (1 1) / 2 + (1 0) / 2 + (1 0) / 2 = 1
 
-        To do this calculation efficiently, we use the following algorithm:
+        To do this calculation efficiently, we use the following algorithm::
 
-        FOR each row in node_inlink_matrix (representing one inlink @ each
-        node)
-        * Multiply the link's q value by its unit x component ...
-          ... divide by node's unit vector sum in x ...
-          ... and add it to the node's total q_x
-        * Multiply the link's q value by its unit y component ...
-          ... divide by node's unit vector sum in y ...
-          ... and add it to the node's total q_y
+            FOR each row in _node_inlink_matrix (representing one inlink @ each
+            node)
+                Multiply the link's q value by its unit x component ...
+                ... divide by node's unit vector sum in x ...
+                ... and add it to the node's total q_x
+                Multiply the link's q value by its unit y component ...
+                ... divide by node's unit vector sum in y ...
+                ... and add it to the node's total q_y
 
         Examples
         --------
 
-        Example 1: q[:] = 1. Vector magnitude is :math:`\sqrt{2}`, direction is
+        **Example 1**
+
+        q[:] = 1. Vector magnitude is :math:`\sqrt{2}`, direction is
         :math:`(1,1)`.
 
-        >>> import numpy as np
-        >>> import landlab as ll
-        >>> rmg = ll.RasterModelGrid(3, 4, 2.0)
-        >>> rmg.node_unit_vector_sum_x
-        array([ 1.,  2.,  2.,  1.,  1.,  2.,  2.,  1.,  1.,  2.,  2.,  1.])
-        >>> rmg.node_unit_vector_sum_y
-        array([ 1.,  1.,  1.,  1.,  2.,  2.,  2.,  2.,  1.,  1.,  1.,  1.])
-        >>> q = np.ones(rmg.number_of_links)
-        >>> nvx, nvy = rmg.map_link_vector_to_nodes(q)
-        >>> nvx
-        array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])
-        >>> nvy
-        array([ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.])
+        >>> from landlab import RasterModelGrid
+        >>> grid = RasterModelGrid((3, 4), spacing=(2., 2.))
+        >>> grid.unit_vector_at_node
+        array([[ 1.,  1.],
+               [ 2.,  1.],
+               [ 2.,  1.],
+               [ 1.,  1.],
+               [ 1.,  2.],
+               [ 2.,  2.],
+               [ 2.,  2.],
+               [ 1.,  2.],
+               [ 1.,  1.],
+               [ 2.,  1.],
+               [ 2.,  1.],
+               [ 1.,  1.]])
+        >>> q = grid.ones(at='link')
+        >>> grid.map_link_vector_to_nodes(q)
+        array([[ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.],
+               [ 1.,  1.]])
 
-        Example 2: Vector magnitude is 5, angle is 30 degrees from horizontal,
+        **Example 2**
+
+        Vector magnitude is 5, angle is 30 degrees from horizontal,
         forming a 3-4-5 triangle.
-        >>> q[:8] = 3.
-        >>> q[8:] = 4.
-        >>> nvx, nvy = rmg.map_link_vector_to_nodes(q)
-        >>> nvx
-        array([ 4.,  4.,  4.,  4.,  4.,  4.,  4.,  4.,  4.,  4.,  4.,  4.])
-        >>> nvy
-        array([ 3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.,  3.])
+
+        >>> import numpy as np
+        >>> q = np.array([4., 4., 4., 3., 3., 3., 3.,
+        ...               4., 4., 4., 3., 3., 3., 3.,
+        ...               4., 4., 4])
+        >>> grid.map_link_vector_to_nodes(q)
+        array([[ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.],
+               [ 4.,  3.]])
 
         ..todo::
 
@@ -2647,16 +3628,9 @@ class ModelGrid(ModelDataFields):
         pre-calculated to have the right values to represent a uniform
         vector with magnitude 5 and orientation 30 degrees counter-clockwise
         from horizontal.
-        # >>> hmg = ll.HexModelGrid(3, 2, 2.0)
-        # >>> q = np.array([4.598, 0.598, -4., -4.598, 4., -0.598, -0.598,
-        # ...     -4., -4.598, -0.598, 4., -4.598])
+
+        LLCATS: NINF LINF CONN MAP
         """
-
-        # Create the arrays to hold the node-based values of the x and y
-        # components of the vector (q)
-        node_vec_x = numpy.zeros(self.number_of_nodes)
-        node_vec_y = numpy.zeros(self.number_of_nodes)
-
         # Break the link-based vector input variable, q, into x- and
         # y-components.
         # Notes:
@@ -2667,30 +3641,23 @@ class ModelGrid(ModelDataFields):
         #   2) This requires memory allocation. Because this function might be
         #       called repeatedly, it would be good to find a way to
         #       pre-allocate to improve speed.
-        qx = numpy.zeros(self.number_of_links + 1)
-        qy = numpy.zeros(self.number_of_links + 1)
-        qx[:self.number_of_links] = q * \
-            self.link_unit_vec_x[:self.number_of_links]
-        qy[:self.number_of_links] = q * \
-            self.link_unit_vec_y[:self.number_of_links]
+        qx = q * self.unit_vector_at_link[:, 0]
+        qy = q * self.unit_vector_at_link[:, 1]
 
-        # Loop over each row in the node_inlink_matrix and node_outlink_matrix.
-        # This isn't a big loop! In a raster grid, these have only two rows
-        # each; in an unstructured grid, it depends on the grid geometry;
-        # for a hex grid, there are up to 6 rows.
-        n_matrix_rows = numpy.size(self.node_inlink_matrix, 0)
-        for i in range(n_matrix_rows):
-            node_vec_x += qx[self.node_inlink_matrix[i, :]]
-            node_vec_x += qx[self.node_outlink_matrix[i, :]]
-            node_vec_y += qy[self.node_inlink_matrix[i, :]]
-            node_vec_y += qy[self.node_outlink_matrix[i, :]]
-        node_vec_x /= self.node_unit_vector_sum_x
-        node_vec_y /= self.node_unit_vector_sum_y
+        active_links_at_node = self.link_dirs_at_node != 0
+        unit_vec_at_node = np.empty((self.number_of_nodes, 2), dtype=float)
+        unit_vec_at_node[:, 0] = (qx[self.links_at_node] * active_links_at_node).sum(axis=1)
+        unit_vec_at_node[:, 1] = (qy[self.links_at_node] * active_links_at_node).sum(axis=1)
 
-        return node_vec_x, node_vec_y
+        return np.divide(unit_vec_at_node, self.unit_vector_at_node,
+                         out=unit_vec_at_node)
 
+    @deprecated(use='plot.imshow_grid', version=1.0)
     def display_grid(self, draw_voronoi=False):
-        """Display the grid."""
+        """Display the grid.
+
+        LLCATS: DEPR GINF
+        """
         import matplotlib.pyplot as plt
 
         # Plot nodes, colored by boundary vs interior
@@ -2707,7 +3674,7 @@ class ModelGrid(ModelDataFields):
                       self.node_y[self.node_at_link_head[i]]], 'k-')
 
         # Draw active links
-        for link in self.active_link_ids:
+        for link in self.active_links:
             plt.plot([self.node_x[self.node_at_link_tail[link]],
                       self.node_x[self.node_at_link_head[link]]],
                      [self.node_y[self.node_at_link_tail[link]],
@@ -2716,15 +3683,19 @@ class ModelGrid(ModelDataFields):
         # If caller asked for a voronoi diagram, draw that too
         if draw_voronoi:
             from scipy.spatial import Voronoi, voronoi_plot_2d
-            pts = numpy.zeros((self.number_of_nodes, 2))
-            pts[:, 0] = self.node_x
-            pts[:, 1] = self.node_y
-            vor = Voronoi(pts)
+            vor = Voronoi(self.xy_of_node)
             voronoi_plot_2d(vor)
 
         plt.show()
 
+    @deprecated(use='node_is_boundary', version=1.0)
     def is_boundary(self, ids, boundary_flag=None):
+        """
+        LLCATS: DEPR NINF BC
+        """
+        return self.node_is_boundary(ids, boundary_flag=boundary_flag)
+
+    def node_is_boundary(self, ids, boundary_flag=None):
         """Check if nodes are boundary nodes.
 
         Check if nodes at given *ids* are boundary nodes. Use the
@@ -2741,6 +3712,17 @@ class ModelGrid(ModelDataFields):
         -------
         ndarray
             Array of booleans indicating if nodes are boundary nodes.
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid, CLOSED_BOUNDARY
+        >>> mg = RasterModelGrid((4, 5))
+        >>> mg.node_is_boundary([0, 6])
+        array([ True, False], dtype=bool)
+        >>> mg.node_is_boundary([0, 6], boundary_flag=CLOSED_BOUNDARY)
+        array([False, False], dtype=bool)
+
+        LLCATS: NINF BC
         """
         if boundary_flag is None:
             return ~ (self._node_status[ids] == CORE_NODE)
@@ -2757,11 +3739,17 @@ class ModelGrid(ModelDataFields):
         self.boundary_nodes, self._node_x, and self._node_y have been
         initialized.
 
+        Returns
+        -------
+        tuple of array_like
+            Tuple of nodes in each coordinate. Nodes are grouped as
+            (*east*, *north*, *west*, *south*).
+
         Examples
         --------
         >>> import landlab as ll
         >>> m = ll.HexModelGrid(5, 3, 1.0)
-        >>> [l,r,t,b] = m._assign_boundary_nodes_to_grid_sides()
+        >>> [r,t,l,b] = m._assign_boundary_nodes_to_grid_sides()
         >>> l
         array([ 7, 12,  3])
         >>> r
@@ -2777,97 +3765,20 @@ class ModelGrid(ModelDataFields):
 
         return _sort_points_into_quadrants(diff_x, diff_y, self.boundary_nodes)
 
-    @deprecated
-    def set_inactive_boundaries(self, bottom_is_inactive, right_is_inactive,
-                                top_is_inactive, left_is_inactive):
-        """Set boundaries to inactive.
-
-        .. note:: Deprecated since version 0.6.
-            Due to imprecise terminology. Use :func:`set_closed_boundaries`
-            instead.
-
-        Handles boundary conditions by setting each of the four sides of the
-        rectangular grid to either 'inactive' or 'active (fixed value)' status.
-        Arguments are booleans indicating whether the bottom, right, top, and
-        left are inactive (True) or not (False).
-
-        For an inactive boundary:
-            - the nodes are flagged CLOSED_BOUNDARY
-            - the links between them and the adjacent core nodes are
-              inactive (so they appear on link-based lists, but not
-              active_link-based lists)
-
-        This means that if you call the calculate_gradients_at_active_links
-        method, the inactive boundaries will be ignored: there can be no
-        gradients or fluxes calculated, because the links that connect to that
-        edge of the grid are not included in the calculation. So, setting a
-        grid edge to CLOSED_BOUNDARY is a convenient way to impose a no-flux
-        boundary condition. Note, however, that this applies to the grid as a
-        whole, rather than a particular variable that you might use in your
-        application. In other words, if you want a no-flux boundary in one
-        variable but a different boundary condition for another, then use
-        another method.
-
-        The following example sets the top and left boundaries as inactive in a
-        four-row by five-column grid that initially has all boundaries active
-        and all boundary nodes coded as FIXED_VALUE_BOUNDARY (=1):
-
-        Examples
-        --------
-        >>> import landlab as ll
-        >>> rmg = ll.HexModelGrid(5, 3, 1.0) # rows, columns, spacing
-        >>> rmg.number_of_active_links
-        30
-        >>> rmg.status_at_node # doctest: +NORMALIZE_WHITESPACE
-        array([1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1],
-              dtype=int8)
-        >>> rmg.set_inactive_boundaries(False, False, True, True)
-        >>> rmg.number_of_active_links
-        21
-        >>> rmg.status_at_node # doctest: +NORMALIZE_WHITESPACE
-        array([1, 1, 1, 4, 0, 0, 1, 4, 0, 0, 0, 1, 4, 0, 0, 1, 4, 4, 4],
-               dtype=int8)
-        """
-        if self._DEBUG_TRACK_METHODS:
-            six.print_('ModelGrid.set_inactive_boundaries')
-
-        [left_edge, right_edge, top_edge, bottom_edge] = \
-            self._assign_boundary_nodes_to_grid_sides()
-
-        if bottom_is_inactive:
-            self._node_status[bottom_edge] = CLOSED_BOUNDARY
-        else:
-            self._node_status[bottom_edge] = FIXED_VALUE_BOUNDARY
-
-        if right_is_inactive:
-            self._node_status[right_edge] = CLOSED_BOUNDARY
-        else:
-            self._node_status[right_edge] = FIXED_VALUE_BOUNDARY
-
-        if top_is_inactive:
-            self._node_status[top_edge] = CLOSED_BOUNDARY
-        else:
-            self._node_status[top_edge] = FIXED_VALUE_BOUNDARY
-
-        if left_is_inactive:
-            self._node_status[left_edge] = CLOSED_BOUNDARY
-        else:
-            self._node_status[left_edge] = FIXED_VALUE_BOUNDARY
-
-        self.update_links_nodes_cells_to_new_BCs()
-
+    @deprecated(use='status_at_node', version=1.0)
     def set_closed_nodes(self, nodes):
         """Make nodes closed boundaries.
 
-        Sets the given nodes' boundary condition statuses to CLOSED (==4),
-        and resets the list of active links to reflect any changes.
-        """
-        self._node_status[nodes] = CLOSED_BOUNDARY
-        self.update_links_nodes_cells_to_new_BCs()
+        Sets the given nodes' boundary condition statuses to CLOSED_BOUNDARY
+        (==4), and resets the list of active links to reflect any changes.
 
-    def get_distances_of_nodes_to_point(self, coord, get_az=None,
-                                        node_subset=None,
-                                        out_distance=None, out_azimuth=None):
+        LLCATS: DEPR NINF BC
+        """
+        self.status_at_node[nodes] = CLOSED_BOUNDARY
+
+    def calc_distances_of_nodes_to_point(self, coord, get_az=None,
+                                         node_subset=None,
+                                         out_distance=None, out_azimuth=None):
         """Get distances for nodes to a given point.
 
         Returns an array of distances for each node to a provided point.
@@ -2936,13 +3847,13 @@ class ModelGrid(ModelDataFields):
         Calculate distances from point at (2., 1.) to a subset of nodes on
         the grid.
 
-        >>> grid.get_distances_of_nodes_to_point((2, 1),
+        >>> grid.calc_distances_of_nodes_to_point((2, 1),
         ...     node_subset=(2, 6, 7, 8, 12))
         array([ 1.,  1.,  0.,  1.,  1.])
 
         Calculate distances from a point to all nodes on the grid.
 
-        >>> dist = grid.get_distances_of_nodes_to_point((2, 1))
+        >>> dist = grid.calc_distances_of_nodes_to_point((2, 1))
         >>> dist.shape == (grid.number_of_nodes, )
         True
         >>> dist.take((2, 6, 7, 8, 12))
@@ -2951,7 +3862,7 @@ class ModelGrid(ModelDataFields):
         Put the distances into a buffer.
 
         >>> out = np.empty(grid.number_of_nodes, dtype=float)
-        >>> dist = grid.get_distances_of_nodes_to_point((2, 1),
+        >>> dist = grid.calc_distances_of_nodes_to_point((2, 1),
         ...     out_distance=out)
         >>> out is dist
         True
@@ -2961,11 +3872,11 @@ class ModelGrid(ModelDataFields):
         Calculate azimuths along with distances. The azimuths are calculated
         in radians but measured clockwise from north.
 
-        >>> (_, azim) = grid.get_distances_of_nodes_to_point((2, 1),
+        >>> (_, azim) = grid.calc_distances_of_nodes_to_point((2, 1),
         ...     get_az='angles')
         >>> azim.take((2, 6, 7, 8, 12)) * 180. / np.pi
         array([ 180.,  270.,    0.,   90.,    0.])
-        >>> (_, azim) = grid.get_distances_of_nodes_to_point((2, 1),
+        >>> (_, azim) = grid.calc_distances_of_nodes_to_point((2, 1),
         ...     get_az='angles', node_subset=(1, 3, 11, 13))
         >>> azim * 180. / np.pi
         array([ 225.,  135.,  315.,   45.])
@@ -2973,11 +3884,13 @@ class ModelGrid(ModelDataFields):
         When calculating displacements, the first row contains displacements
         in x and the second displacements in y.
 
-        >>> (_, azim) = grid.get_distances_of_nodes_to_point((2, 1),
+        >>> (_, azim) = grid.calc_distances_of_nodes_to_point((2, 1),
         ...     get_az='displacements', node_subset=(2, 6, 7, 8, 12))
         >>> azim
         array([[ 0., -1.,  0.,  1.,  0.],
                [-1.,  0.,  0.,  0.,  1.]])
+
+        LLCATS: NINF MEAS
         """
         if len(coord) != 2:
             raise ValueError('coordinate must iterable of length 2')
@@ -3075,9 +3988,11 @@ class ModelGrid(ModelDataFields):
         array([ 0.,  1.,  2.,  3.])
         >>> distances[0, ::4]
         array([ 0.,  1.,  2.])
+
+        LLCATS: NINF MEAS
         """
         if self._all_node_distances_map is None:
-            self.build_all_node_distances_azimuths_maps()
+            self._create_all_node_distances_azimuths_maps()
         return self._all_node_distances_map
 
     @property
@@ -3109,12 +4024,14 @@ class ModelGrid(ModelDataFields):
         array([ 0.,  0.,  0.])
         >>> angles[0, ::5]
         array([  0.,  45.,  45.])
+
+        LLCATS: NINF MEAS
         """
         if self._all_node_azimuths_map is None:
-            self.build_all_node_distances_azimuths_maps()
+            self._create_all_node_distances_azimuths_maps()
         return self._all_node_azimuths_map
 
-    def build_all_node_distances_azimuths_maps(self):
+    def _create_all_node_distances_azimuths_maps(self):
         """Build distance-azimuth maps.
 
         This function creates and stores in the grid field two ``nnodes`` by
@@ -3149,16 +4066,70 @@ class ModelGrid(ModelDataFields):
         for i in range(self.number_of_nodes):
             (self._all_node_distances_map[i, :],
              self._all_node_azimuths_map[i, :]) = (
-                 self.get_distances_of_nodes_to_point(
+                 self.calc_distances_of_nodes_to_point(
                      (node_coords[i, 0], node_coords[i, 1]), get_az='angles'))
 
         assert numpy.all(self._all_node_distances_map >= 0.)
 
         return self._all_node_distances_map, self._all_node_azimuths_map
 
+    def _sort_links_by_midpoint(self):
+        """Sort links in order first by midpoint x coordinate, then y.
+
+        Examples
+        --------
+        >>> from landlab import HexModelGrid
+        >>> hg = HexModelGrid(3, 3)
+        >>> hg._sort_links_by_midpoint()
+        """
+        pts = np.zeros((self.number_of_links, 2))
+        pts[:, 0] = (self.node_x[self.node_at_link_tail] +
+                     self.node_x[self.node_at_link_head]) / 2
+        pts[:, 1] = (self.node_y[self.node_at_link_tail] +
+                     self.node_y[self.node_at_link_head]) / 2
+        indices = argsort_points_by_x_then_y(pts)
+        self.node_at_link_tail[:] = self.node_at_link_tail[indices]
+        self.node_at_link_head[:] = self.node_at_link_head[indices]
+
+    def move_origin(self, origin):
+        """Changes the x, y values of all nodes.  Initially a grid will have
+        an origin of 0,0, and all x,y values will be relative to 0,0.  This
+        will add origin[0] to all x values and origin[1] to all y values.
+
+        Note this is most likely useful when importing a DEM that has an
+        absolute location, however it can be used generally.
+
+        Parameters
+        ----------
+        origin : list of two float values, can be negative.
+            [x,y], where x is the value to add to all x values and
+            y is the value to add to all y values
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> rmg = RasterModelGrid((4, 3), 1.0) # rows, columns, spacing
+        >>> rmg.node_x
+        array([ 0.,  1.,  2.,  0.,  1.,  2.,  0.,  1.,  2.,  0.,  1.,  2.])
+        >>> rmg.node_y
+        array([ 0.,  0.,  0.,  1.,  1.,  1.,  2.,  2.,  2.,  3.,  3.,  3.])
+        >>> rmg.move_origin((5,1.5))
+        >>> rmg.node_x
+        array([ 5.,  6.,  7.,  5.,  6.,  7.,  5.,  6.,  7.,  5.,  6.,  7.])
+        >>> rmg.node_y
+        array([ 1.5,  1.5,  1.5,  2.5,  2.5,  2.5,  3.5,  3.5,  3.5,  4.5,  4.5,
+        4.5])
+
+        LLCATS: GINF MEAS
+        """
+        self._xy_of_node += origin
+
 
 add_module_functions_to_class(ModelGrid, 'mappers.py', pattern='map_*')
-add_module_functions_to_class(ModelGrid, 'gradients.py', pattern='calculate_*')
+# add_module_functions_to_class(ModelGrid, 'gradients.py',
+#                               pattern='calculate_*')
+add_module_functions_to_class(ModelGrid, 'gradients.py', pattern='calc_*')
+add_module_functions_to_class(ModelGrid, 'divergence.py', pattern='calc_*')
 
 
 if __name__ == '__main__':

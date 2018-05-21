@@ -1,113 +1,150 @@
-""" generate_uniform_precip.py
- This component generates rainfall
- events based on statistical distributions.
+"""Generate precipitation using the Poisson pulse model.
 
- No particular units must be used, but it was
- written with the storm units in hours (hr)
-and depth units in millimeters (mm)
+Landlab component that generates precipitation events using the rectangular
+Poisson pulse model described in Eagleson (1978, Water Resources Research).
 
 
- Written by Jordan Adams, 2013.
+No particular units must be used, but it was written with the storm units in
+hours (hr) and depth units in millimeters (mm)
+
+Written by Jordan Adams, 2013, updated May 2016
 """
 
-import os
-import numpy as np
-import random
-from landlab import Component,ModelParameterDictionary
-from landlab.core.model_parameter_dictionary import MissingKeyError
 
-_DEFAULT_INPUT_FILE = os.path.join(os.path.dirname(__file__),
-                                  'preciptest.in')
+import random
+import numpy as np
+from landlab import Component, ModelGrid
+from six import next
+
 
 class PrecipitationDistribution(Component):
-    """Landlab component that generates precipitation events
-    using the rectangular Poisson pulse model described in
-    Eagleson (1978).
+
+    """Generate precipitation events.
 
     This component can generate a random storm duration, interstorm
     duration, precipitation intensity or storm depth from a Poisson
     distribution when given a mean value.
 
-    Default input file is named 'preciptest.in' and can be found in
-    the landlab.components.uniform_precip folder.
+    Examples
+    --------
+    >>> from landlab.components.uniform_precip import PrecipitationDistribution
+    >>> import numpy as np
+    >>> np.random.seed(np.arange(10))
 
-        Inputs
-        ------
-        input_file : Contains necessary inputs. If not given, default input file is used.
-            - MEAN_STORM: (type : float) the mean storm duration if not provided in initialization
-            - MEAN_DEPTH: (type : float) the mean storm depth if not provided in initizalization
-            - MEAN_INTERSTORM: (type : float) the mean interstorm duration if not provided in initialization
-            - RUN_TIME: (type : float) total model run time if not provided in initialization
-            - DELTA_T: (type : int) external time step increment if not provided in initialization
-                (it is not obligtory to provide a DELTA_T)
+    To use hard-coded values for mean storm, mean interstorm, mean depth,
+    model run time and delta t...  Say we use 1.5 for mean storm, 15 for mean
+    interstorm, 0.5 for mean depth, 100 for model run time and 1 for delta t...
 
-    So, without an input file (selecting the default), we can call this component like...
+    >>> precip = PrecipitationDistribution(mean_storm_duration=1.5,
+    ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+    ...     total_t=100.0, delta_t=1.)
+    >>> for (dt, rate) in precip.yield_storm_interstorm_duration_intensity():
+    ...     pass  # and so on
 
-    >>> from landlab.components.uniform_precip.generate_uniform_precip import PrecipitationDistribution
-    >>> precip = PrecipitationDistribution()
+    Alternatively, we can pass a grid to the component, and call yield_storms()
+    to generate storm-interstorm float pairs while the intensity data is stored
+    in the grid scalar field 'rainfall__flux':
 
-    To use hard-coded values for mean storm, mean interstorm, mean depth, model run time and delta t...
-    Say we use 1.5 for mean storm, 15 for mean interstorm, 0.5 for mean depth, 100 for model run time and 1 for delta t...
+    >>> from landlab import RasterModelGrid
+    >>> mg = RasterModelGrid((4, 5), (1., 1.))
+    >>> precip = PrecipitationDistribution(mg, mean_storm_duration=1.5,
+    ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+    ...     total_t=46.)
+    >>> storm_dts = []
+    >>> interstorm_dts = []
+    >>> intensities = []
+    >>> precip.seed_generator(seedval=1)
+    >>> for (storm_dt, interstorm_dt) in precip.yield_storms():
+    ...     storm_dts.append(storm_dt)
+    ...     interstorm_dts.append(interstorm_dt)
+    ...     intensities.append(mg.at_grid['rainfall__flux'])
+    >>> len(storm_dts) == 4  # 4 storms in the simulation
+    True
+    >>> len(interstorm_dts) == len(storm_dts)
+    True
+    >>> rf_intensities_to_test = np.array([0.8138257984406472,
+    ...                                    0.15929112025199238,
+    ...                                    0.17254519305000884,
+    ...                                    0.09817611240558813])
+    >>> np.allclose(intensities, rf_intensities_to_test)
+    True
+    >>> np.isclose(sum(storm_dts) + sum(interstorm_dts), 46.)  # test total_t
+    True
+    >>> np.isclose(interstorm_dts[-1], 0.)  # sequence truncated as necessary
+    True
 
-    >>> precip = PrecipitationDistribution(input_file=None,
-    ...     mean_storm=1.5, mean_interstorm=15.0, mean_storm_depth=0.5,
-    ...     total_t=100.0, delta_t=1)
+    We can also turn the generator straight into a list, like this:
+
+    >>> precip.seed_generator(seedval=1)
+    >>> steps = [(dt + istorm_dt) for (dt, istorm_dt) in precip.yield_storms()]
+    >>> np.isclose(sum(steps), 46.)
+    True
     """
 
-    def __init__(self, input_file=None, mean_storm=None, mean_interstorm=None, mean_storm_depth=None, total_t=None, delta_t=None):
-        """ This reads in information from the input_file (either default or user
-            assigned, and creates an instantaneous storm event drawn from the Poisson distribution
+    _name = 'PrecipitationDistribution'
+
+    _input_var_names = tuple()
+
+    _output_var_names = tuple()
+
+    _optional_var_names = ('rainfall__flux', )
+
+    _var_units = {'rainfall__flux': '[depth unit]/[time unit]', }
+
+    _var_mapping = {'rainfall__flux': 'grid', }
+
+    _var_doc = {
+        'rainfall__flux':
+            'Depth of water delivered per unit time in each storm', }
+
+    def __init__(self, grid=None,
+                 mean_storm_duration=0.0, mean_interstorm_duration=0.0,
+                 mean_storm_depth=0.0, total_t=0.0, delta_t=None,
+                 random_seed=0, **kwds):
+        """Create the storm generator.
+
+        Parameters
+        ----------
+        grid : ModelGrid
+            A Landlab grid (optional). If provided, storm intensities will be
+            stored as a grid scalar field as the component simulates storms.
+        mean_storm_duration : float
+            Average duration of a precipitation event.
+        mean_interstorm_duration : float
+            Average duration between precipitation events.
+        mean_storm_depth : float
+            Average depth of precipitation events.
+        total_t : float, optional
+            If generating a time series, the total amount of time.
+        delta_t : float or None, optional
+            If you want to break up storms into determined subsections using
+            yield_storm_interstorm_duration_intensity, a delta_t is needed.
+        random_seed : int or float, optional
+            Seed value for random-number generator.
         """
 
-        # First we create an instance of the Model Parameter Dictionary
-        MPD = ModelParameterDictionary()
+        self.mean_storm_duration = mean_storm_duration
 
-        # If no input_file is given,the default file is used
-        if input_file is None:
-            input_file = _DEFAULT_INPUT_FILE
+        self.mean_interstorm_duration = mean_interstorm_duration
 
-        # This reads in the file information
-        MPD.read_from_file(input_file)
+        self.mean_storm_depth = mean_storm_depth
 
-        # And now we set our different parameters
-        # using the model parameter dictionary...
-        if mean_storm == None:
-            self.mean_storm = MPD.read_float( 'MEAN_STORM')
-        else:
-            self.mean_storm = mean_storm
+        self.run_time = total_t
 
-        if mean_interstorm == None:
-            self.mean_interstorm = MPD.read_float( 'MEAN_INTERSTORM')
-        else:
-            self.mean_interstorm =mean_interstorm
+        self.delta_t = delta_t
 
-        if mean_storm_depth== None:
-            self.mean_storm_depth = MPD.read_float( 'MEAN_DEPTH')
-        else:
-            self.mean_storm_depth =mean_storm_depth
-
-        if total_t== None:
-            self.run_time = MPD.read_float( 'RUN_TIME')
-        else:
-            self.run_time =total_t
-
-        if delta_t== None:
-            if input_file != _DEFAULT_INPUT_FILE:
-                try:
-                    self.delta_t = MPD.read_float( 'DELTA_T')
-                except MissingKeyError:
-                    self.delta_t = None
-            else:
-                self.delta_t = None
-        else:
-            self.delta_t =delta_t
+        if self.delta_t == 0.:
+            self.delta_t = None
 
         # Mean_intensity is not set by the MPD, but can be drawn from
         # the mean storm depth and mean storm duration.
-        self.mean_intensity = self.mean_storm_depth / self.mean_storm
+        self.mean_intensity = self.mean_storm_depth / self.mean_storm_duration
 
         # If a time series is created later, this blank list will be used.
-        self.storm_time_series =[]
+        self.storm_time_series = []
+
+        # Seed the random-number generator
+        self.seed_generator(random_seed)
 
         # Given the mean values assigned above using either the model
         # parameter dictionary or the init function, we can call the
@@ -116,160 +153,180 @@ class PrecipitationDistribution(Component):
         self.storm_duration = self.get_precipitation_event_duration()
         self.interstorm_duration = self.get_interstorm_event_duration()
         self.storm_depth = self.get_storm_depth()
-        self.intensity = self.get_storm_intensity()
         self._elapsed_time = 0.
 
+        # Test if we got a grid. If we did, then assign it to _grid, and we
+        # are able to use the at_grid field. If not, that's cool too.
+        if grid is not None:
+            assert isinstance(grid, ModelGrid)  # must be a grid
+            self._grid = grid
+
+        # build LL fields, if a grid is supplied:
+        if grid is not None:
+            self.grid.add_field('grid', 'rainfall__flux', 0.)
+            self._gridupdate = True
+        else:
+            self._gridupdate = False
+
+        self._intensity = self.get_storm_intensity()
 
     def update(self):
-        """If new values for storm duration, interstorm duration, storm depth
-        and intensity are needed, this method can be used to update those values
-        one time.
+        """Update the storm values.
 
-        >>> from landlab.components.uniform_precip.generate_uniform_precip import PrecipitationDistribution
-        >>> PD = PrecipitationDistribution()
-        >>> PD.update()
+        If new values for storm duration, interstorm duration, storm depth
+        and intensity are needed, this method can be used to update those
+        values one time.
+
+        Examples
+        --------
+        >>> from landlab.components import PrecipitationDistribution
+        >>> precip = PrecipitationDistribution(mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=100.0, delta_t=1)
 
         Additionally, if we wanted to update several times, a loop could be
         utilized to accomplish this. Say we want 5 storm_durations; this
         pseudo-code represents a way to accomplish this...
 
-        >>> PD = PrecipitationDistribution()
-        >>> storm_duration_list=[]
+        >>> storm_duration_list = []
         >>> i = 0
         >>> while i < 4:
-        ...     storm_duration_list.append(PD.storm_duration)
-        ...     PD.update()
-        ...     i+=1
-        """
+        ...     storm_duration_list.append(precip.storm_duration)
+        ...     precip.update()
+        ...     i += 1
 
+        Note though that alternatively we could also do this, avoiding the
+        method entirely...
+
+        >>> from six import next
+        >>> # ^^this lets you "manually" get the next item from the iterator
+        >>> precip = PrecipitationDistribution(mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=46.)
+        >>> storm_duration_list = []
+        >>> for i in range(5):
+        ...     storm_duration_list.append(next(
+        ...         precip.yield_storm_interstorm_duration_intensity())[0])
+
+        Notice that doing this will *not* automatically stop the iteration,
+        however - it will continue ad infinitum.
+        """
         self.storm_duration = self.get_precipitation_event_duration()
         self.interstorm_duration = self.get_interstorm_event_duration()
         self.storm_depth = self.get_storm_depth()
-        self.intensity = self.get_storm_intensity()
+        self._intensity = self.get_storm_intensity()
 
     def get_precipitation_event_duration(self):
         """This method is the storm generator.
 
-    This method has one argument: the mean_storm parameter.
-    (In Eagleson (1978), this parameter was called Tr.)
+        This method has one argument: the mean_storm_duration parameter.
+        (In Eagleson (1978), this parameter was called Tr.)
 
-    It finds a random storm_duration value
-    based on the poisson distribution about the mean.
-    This is accomplished using the expovariate function
-    from the "random" standard library.
-    Additionally, it is rounded to contain 4 significant figures,
-    for neatness.
+        It finds a random storm_duration value
+        based on the poisson distribution about the mean.
+        This is accomplished using the expovariate function
+        from the "random" standard library.
 
-    The if-else statement is very important here. Values of 0
-    can exist in the Poission distribution, but it does not make
-    sense to have 0 duration storms, so to avoid that,
-    we return a storm duration IF it is greater than 0,
-    otherwise, recursion is employed to re-call the storm
-    generator function and get a new value.
-
-    :returns: storm_duration as a float
-    """
-        storm = round(random.expovariate(1/self.mean_storm),2)
-        while storm == 0:
-            storm = round(random.expovariate(1/self.mean_storm),2)
-        self.storm_duration = storm
-        return self.storm_duration
-
-
+        Returns
+        -------
+        float
+            The storm duration.
+        """
+        return random.expovariate(1.0 / self.mean_storm_duration)
 
     def get_interstorm_event_duration(self):
-        """ This method is the interstorm duration generator
+        """Generate interstorm events.
 
-    This method takes one argument, the mean_interstorm parameter.
-    (In Eagleson (1978), this parameter was called Tb.)
+        This method takes one argument, the mean_interstorm_duration parameter.
+        (In Eagleson (1978), this parameter was called Tb.)
 
-    This method is modeled identically to get_precipitation_event_duration()
+        This method is modeled identically to
+        get_precipitation_event_duration()
 
-    This method finds a random value for interstorm_duration
-    based on the poisson distribution about the mean.
-    This is accomplished using the expovariate function
-    from the "random" standard library.
-    Additionally, it is rounded to contain 4 significant figures, for neatness.
+        This method finds a random value for interstorm_duration
+        based on the poisson distribution about the mean.
+        This is accomplished using the expovariate function
+        from the "random" standard library.
 
-    The if-else statement is very important here. Values of 0
-    can exist in the Poission distribution, but it does not make
-    sense to have 0 hour interstorm durations.
-    To avoid 0 hour interstorm durations, we return a
-    interstorm duration IF it is greater than 0,
-    otherwise, recursion is employed to re-call the interstorm
-    duration generator function and get a new value.
-
-    :returns: interstorm_duration as a float"""
-
-        interstorm = round(random.expovariate(1/self.mean_interstorm),2)
-        while interstorm == 0:
-            interstorm = round(random.expovariate(1/self.mean_interstorm),2)
-        self.interstorm_duration = interstorm
-        return self.interstorm_duration
-
+        Returns
+        -------
+        float
+            The interstorm duration.
+        """
+        return random.expovariate(1.0 / self.mean_interstorm_duration)
 
     def get_storm_depth(self):
-        """  This method is the storm depth generator.
-    Storm depth is used to generate a realistic
-    intensity for different storm events.
+        """Generate storm depth.
 
-    (In Eagleson (1978) this parameter was called "h")
+        Storm depth is used to generate a realistic
+        intensity for different storm events.
 
-    This method requires storm_duration, mean_storm duration
-    and the mean_storm_depth. Storm_duration is generated through
-    the initialize() or update() method. mean_storm and mean_storm_depth
-    are read in using the ModelParameterDictionary.
+        (In Eagleson (1978) this parameter was called "h")
 
-    Numpy has a random number generator to get values
-    from a given Gamma distribution. It takes two arguments,
-    alpha (or the shape parameter), which is the generated over the mean event
-    and beta (or the scale parameter), which is the mean value
-    These are all arguments in the function, which returns storm depth.
+        This method requires storm_duration, mean_storm_duration
+        and the mean_storm_depth. Storm_duration is generated through
+        the initialize() or update() method.
 
-    :returns: storm_depth as a float
-    """
+        Numpy has a random number generator to get values
+        from a given Gamma distribution. It takes two arguments,
+        alpha (or the shape parameter), which is the generated over the mean
+        event and beta (or the scale parameter), which is the mean value
+        These are all arguments in the function, which returns storm depth.
 
-        shape_parameter = (self.storm_duration/self.mean_storm)
+        Returns
+        -------
+        float
+            The storm depth.
+        """
+
+        shape_parameter = (self.storm_duration / self.mean_storm_duration)
         scale_parameter = (self.mean_storm_depth)
         self.storm_depth = np.random.gamma(shape_parameter, scale_parameter)
         return self.storm_depth
 
-
     def get_storm_intensity(self):
-        """   This method draws storm intensity out of the storm depth
-    generated by get_storm_depth.
+        """Get the storm intensity.
 
-    This method requires the storm_depth and storm_duration
-    and is the same as the parameter ("i") in Eagleson (1978), but instead of
-    being drawn from Poission, this is drawn from the Gamma distribution
-    of ("h"), as h = i*Tr.
+        This method draws storm intensity out of the storm depth generated by
+        get_storm_depth.
 
-    :returns: storm_intensity as a float
+        This method requires the storm_depth and storm_duration
+        and is the same as the parameter ("i") in Eagleson (1978), but instead
+        of being drawn from Poission, this is drawn from the Gamma distribution
+        of (*h*), as :math:`h = i * Tr`.
 
-                            """
-        self.intensity = self.storm_depth / self.storm_duration
-        return self.intensity
-
+        Returns
+        -------
+        float
+            The storm intensity.
+        """
+        self._intensity = self.storm_depth / self.storm_duration
+        if self._gridupdate:
+            self.grid.at_grid['rainfall__flux'] = self._intensity
+        return self._intensity
 
     def get_storm_time_series(self):
-        """
-        This method creates a time series of storms based on storm_duration, and
-        interstorm_duration. From these values it will calculate a complete
+        """Get a time series of storms.
+
+        This method creates a time series of storms based on storm_duration,
+        and interstorm_duration. From these values it will calculate a complete
         time series.
 
-        The storm_time_series returned by this method is made up of sublists, each comprising of three
-        sub-parts (e.g. [[x,y,z], [a,b,c]]) where x and a are the beginning times of a precipitation
-        event, y and b are the ending times of the precipitation event and z and c represent the
-        average intensity (mm/hr) of the storm lasting from x to y and a to be, respectively.
-        :returns: array containing several sub-arrays of events [start, finish, intensity]
+        The storm_time_series returned by this method is made up of sublists,
+        each comprising of three sub-parts (e.g. [[x,y,z], [a,b,c]]) where x
+        and a are the beginning times of a precipitation event, y and b are the
+        ending times of the precipitation event and z and c represent the
+        average intensity (mm/hr) of the storm lasting from x to y and a to be,
+        respectively.
 
+        Even if a grid was passed to the component at instantiation, calling
+        this method does not update the grid fields.
 
-        There is a helper and an iterator. Open to suggestions on how to make this
-        sleeker. helper keeps track of storm events so that we can properly adjust the time for the
-        storm_time_series list.
-
-        Storm iterator makes sure that the run goes through to the specified time, either read in as "run_time" by
-        the ModelParameterDictionary or specified the fire time this method is called."""
+        Returns
+        -------
+        array
+            containing several sub-arrays of events [start, finish, intensity]
+        """
 
         storm = self.get_precipitation_event_duration()
         self.get_storm_depth()
@@ -279,82 +336,308 @@ class PrecipitationDistribution(Component):
         storm_helper = storm
         storm_iterator = storm
         while storm_iterator <= self.run_time:
-            next_storm_start  = storm_helper + round(self.get_interstorm_event_duration(),2)
-            next_storm_end = next_storm_start + round(self.get_precipitation_event_duration(),2)
-            intensity = round(self.get_storm_intensity(),2)
+            next_storm_start = storm_helper + (round(
+                                    self.get_interstorm_event_duration(), 2))
+            next_storm_end = next_storm_start + (round(
+                                self.get_precipitation_event_duration(), 2))
+            intensity = round(self.get_storm_intensity(), 2)
             self.get_storm_depth()
-            self.storm_time_series.append([next_storm_start, next_storm_end, intensity])
+            self.storm_time_series.append(
+                            [next_storm_start, next_storm_end, intensity])
             storm_iterator = storm_helper
             storm_helper = next_storm_end
             storm_iterator = storm_helper
         return self.storm_time_series
 
-    def yield_storm_interstorm_duration_intensity(self, subdivide_interstorms=False):
-        """
+    def yield_storm_interstorm_duration_intensity(self,
+                                                  subdivide_interstorms=False):
+        """Iterator for a time series of storms interspersed with interstorms.
+
         This method is intended to be equivalent to get_storm_time_series,
         but instead offers a generator functionality. This will be useful in
         cases where the whole sequence of storms and interstorms doesn't need
         to be stored, where we can save memory this way.
 
-        The method keeps track of the DELTA_T such that if a storm needs to be
+        The method keeps track of the delta_t such that if a storm needs to be
         generated longer than this supplied model timestep, the generator will
         return the storm in "chunks", until there is no more storm duration.
         e.g.,
-        storm of intensity 1. is 4.5 long, the DELTA_T is 2., the generator
+        storm of intensity 1. is 4.5 long, the delta_t is 2., the generator
         yields (2.,1.) -> (2.,1.) -> (0.5,1.) -> ...
 
-        If DELTA_T is None or not supplied, no subdivision occurs.
+        If delta_t is None or not supplied, no subdivision occurs.
 
         Once a storm has been generated, this method will follow it with the
         next interstorm, yielded as (interstorm_duration, 0.). Note that the
-        interstorm will NOT be subdivided according to DELTA_T unless you set
+        interstorm will NOT be subdivided according to delta_t unless you set
         the flag *subdivide_interstorms* to True.
 
         The method will keep yielding until it reaches the RUN_TIME, where it
         will terminate.
 
-        YIELDS:
-            - a tuple, (interval_duration, rainfall_rate_in_interval)
+        Yields
+        ------
+        tuple of float
+            (interval_duration, rainfall_rate_in_interval)
 
+        Notes
+        -----
         One recommended procedure is to instantiate the generator, then call
-        instance.next() repeatedly to get the sequence.
-
-        Added DEJH, Dec 2014
+        instance.next() (in Python 2) or next(instance) (in Python 3)
+        repeatedly to get the sequence.
         """
+        # Added DEJH, Dec 2014
+        # Modified to use an optional output field, DEJH 1/8/17
+
         delta_t = self.delta_t
-        if delta_t == None:
-            assert subdivide_interstorms == False, 'You specified you wanted storm subdivision, but did not provide a DELTA_T to allow this!'
+        if delta_t is None:
+            assert subdivide_interstorms is False, (
+                'You specified you wanted storm subdivision, but did not ' +
+                'provide a delta_t to allow this!')
         self._elapsed_time = 0.
-        while self._elapsed_time<self.run_time:
+        while self._elapsed_time < self.run_time:
             storm_duration = self.get_precipitation_event_duration()
-            step_time=0.
+            step_time = 0.
             self.get_storm_depth()
-            intensity = self.get_storm_intensity() #this is a VELOCITY, i.e., a rainfall rate
-            if self._elapsed_time+storm_duration>self.run_time:
-                storm_duration = self.run_time-self._elapsed_time
-            while delta_t!=None and storm_duration-step_time>delta_t:
-                yield (delta_t, intensity)
-                step_time+=delta_t
-            yield (storm_duration-step_time, intensity)
+            self._intensity = self.get_storm_intensity()  # this is a rate
+            # ^ this updates the grid field, if needed
+            if self._elapsed_time + storm_duration > self.run_time:
+                storm_duration = self.run_time - self._elapsed_time
+            while delta_t is not None and storm_duration - step_time > delta_t:
+                yield (delta_t, self._intensity)
+                step_time += delta_t
+            yield (storm_duration - step_time, self._intensity)
             self._elapsed_time += storm_duration
 
-            interstorm_duration = self.get_interstorm_event_duration()
-            if self._elapsed_time+interstorm_duration>self.run_time:
-                interstorm_duration = self.run_time-self._elapsed_time
-            if subdivide_interstorms:
-                step_time=0.
-                while interstorm_duration-step_time>delta_t:
-                    yield (delta_t, 0.)
-                    step_time += delta_t
-                yield (interstorm_duration-step_time, 0.)
-            else:
-                yield (interstorm_duration, 0.)
-            self._elapsed_time += interstorm_duration
+            # If the last storm did not use up all our elapsed time, generate
+            # an inter-storm period.
+            if self._elapsed_time < self.run_time:
+                interstorm_duration = self.get_interstorm_event_duration()
+                if self._elapsed_time + interstorm_duration > self.run_time:
+                    interstorm_duration = self.run_time - self._elapsed_time
+                self._intensity = 0.
+                if self._gridupdate:
+                    self.grid.at_grid['rainfall__flux'] = 0.
+                if subdivide_interstorms:
+                    step_time = 0.
+                    while interstorm_duration-step_time > delta_t:
+                        yield (delta_t, 0.)
+                        step_time += delta_t
+                    yield (interstorm_duration - step_time, 0.)
+                else:
+                    yield (interstorm_duration, 0.)
+                self._elapsed_time += interstorm_duration
+
+    def yield_storms(self):
+        """Iterator for a time series of storm-interstorm pairs.
+
+        This method is very similar to this component's other generator,
+        yield_storm_interstorm_duration_intensity(), but the way it yields is
+        slightly different. Instead of yielding (interval_duration, rf_rate),
+        with interstorms represented as intervals with rf_rate = 0, it yields:
+
+            (storm_duration, interstorm_duration)
+
+        When each tuple pair is yielded, the grid scalar field 'rainfall__flux'
+        is updated with the rainfall rate occuring during storm_duration.
+
+        This generator method is designed for direct equivalence with the
+        spatially resolved generators found elsewhere in Landlab.
+
+        This generator will be useful in cases where the whole sequence of
+        storms and interstorms doesn't need to be stored, where we can save
+        memory this way.
+
+        This method does not attempt to subdivide timesteps. If you want that,
+        provide a delta_t at instantiation, and use
+        yield_storm_interstorm_duration_intensity(subdivide_interstorms=True).
+
+        The method will keep yielding until it reaches the RUN_TIME, where it
+        will terminate. If it terminates during a storm, the final tuple will
+        be (truncated_storm_duration, 0.). Otherwise it will be
+        (storm_duration, truncated_interstorm_duration.)
+
+        Yields
+        ------
+        tuple of float
+            (storm_duration, interstorm_duration)
+
+        Notes
+        -----
+        One recommended procedure is to instantiate the generator, then call
+        instance.next() (in Python 2) or next(instance) (in Python 3)
+        repeatedly to get the sequence (See Examples, below).
+
+        Examples
+        --------
+        >>> from landlab import RasterModelGrid
+        >>> mg = RasterModelGrid((4, 5), (1., 1.))
+        >>> precip = PrecipitationDistribution(mg, mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=46.)
+        >>> storm_dts = []
+        >>> interstorm_dts = []
+        >>> intensities = []
+        >>> precip.seed_generator(seedval=1)
+        >>> for (storm_dt, interstorm_dt) in precip.yield_storms():
+        ...     storm_dts.append(storm_dt)
+        ...     interstorm_dts.append(interstorm_dt)
+        ...     intensities.append(mg.at_grid['rainfall__flux'])
+        >>> len(storm_dts) == 4  # 4 storms in the simulation
+        True
+        >>> len(interstorm_dts) == len(storm_dts)
+        True
+        >>> rf_intensities_to_test = np.array([0.8138257984406472,
+        ...                                    0.15929112025199238,
+        ...                                    0.17254519305000884,
+        ...                                    0.09817611240558813])
+        >>> np.allclose(intensities, rf_intensities_to_test)
+        True
+        >>> np.isclose(sum(storm_dts) + sum(interstorm_dts), 46.)  # total_t
+        True
+        >>> np.isclose(interstorm_dts[-1], 0.)  # sequence truncated
+        True
+
+        An alternative way to use the generator might be:
+
+        >>> from six import next
+        >>> # ^^this lets you "manually" get the next item from the iterator
+        >>> _ = mg.at_grid.pop('rainfall__flux')  # remove the existing field
+        >>> precip = PrecipitationDistribution(mg, mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=46.)
+        >>> precip.seed_generator(seedval=1)
+        >>> mystorm_generator = precip.yield_storms()
+        >>> my_list_of_storms = []
+        >>> for i in range(4):
+        ...     my_list_of_storms.append(next(mystorm_generator))
+
+        Note that an exception is thrown if you go too far:
+
+        >>> my_list_of_storms.append(next(mystorm_generator))  # the 5th iter
+        Traceback (most recent call last):
+          ...
+        StopIteration
+
+        Also note that the generator won't terminate if you try this without
+        first instantiating the generator:
+
+        >>> allmytimes = []
+        >>> for i in range(20):  # this will run just fine
+        ...     allmytimes.append(next(precip.yield_storms()))
+        >>> total_t = sum([sum(storm) for storm in allmytimes])
+        >>> total_t > 46.
+        True
+
+        """
+        # we must have instantiated with a grid, so check:
+        assert hasattr(self, '_grid')
+
+        # now exploit the existing generator to make this easier & less
+        # redundant:
+        delta_t = self.delta_t
+        self.delta_t = None  # this is necessary to suppress chunking behaviour
+        # in the other generator
+        othergen = self.yield_storm_interstorm_duration_intensity()
+        # enter a loop, to break as needed:
+        tobreak = False
+        while not tobreak:
+            # we always start with a storm, so:
+            try:
+                (storm_dur, storm_int) = next(othergen)
+            except StopIteration:
+                break  # stop dead. We terminated at a good place
+            try:
+                (interstorm_dur, _) = next(othergen)
+            except StopIteration:
+                tobreak = True
+                interstorm_dur = 0.
+            # reset the rainfall__flux field, that got overstamped in the
+            # interstorm iter:
+            self.grid.at_grid['rainfall__flux'] = storm_int
+            yield (storm_dur, interstorm_dur)
+        # now, just in case, restore self.delta_t:
+        self.delta_t = delta_t
+
+    def generate_from_stretched_exponential(self, scale, shape):
+        """Generate and return a random variable from a stretched exponential
+        distribution with given scale and shape.
+
+        Examples
+        --------
+        >>> np.random.seed(0)
+        >>> np.round(np.random.rand(3), 6)  # these are our 3 rand #s to test
+        array([ 0.548814,  0.715189,  0.602763])
+        >>> from landlab.components import PrecipitationDistribution
+        >>> pd = PrecipitationDistribution(mean_storm_duration=1.0,
+        ...                                mean_interstorm_duration=1.0,
+        ...                                mean_storm_depth=1.0)
+        >>> np.random.seed(0)  # re-set seed so we get the same 3 #s
+        >>> np.round(1000 * pd.generate_from_stretched_exponential(2.0, 0.5))
+        720.0
+        >>> np.round(1000 * pd.generate_from_stretched_exponential(2.0, 0.5))
+        225.0
+        >>> np.round(1000 * pd.generate_from_stretched_exponential(2.0, 0.5))
+        513.0
+        """
+        return scale * ((-np.log(np.random.rand())) ** (1.0 / shape))
+
+    def seed_generator(self, seedval=0):
+        """Seed the random-number generator.
+
+        The examples illustrate:
+        (1) that we can get the same sequence again by re-seeding with the
+            same value (the default is zero)
+        (2) when we use a value other than the default, we get a different
+            sequence
+
+        Examples
+        --------
+        >>> precip = PrecipitationDistribution(mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=100.0, delta_t=1.)
+        >>> round(precip.storm_duration, 2)
+        2.79
+        >>> round(precip.interstorm_duration, 2)
+        21.28
+        >>> round(precip.storm_depth, 2)
+        2.45
+        >>> round(precip.intensity, 2)
+        0.88
+        >>> precip.seed_generator() # re-seed and get same sequence again
+        >>> round(precip.get_precipitation_event_duration(), 2)
+        2.79
+        >>> round(precip.get_interstorm_event_duration(), 2)
+        21.28
+        >>> round(precip.get_storm_depth(), 2)
+        2.45
+        >>> round(precip.get_storm_intensity(), 2)
+        0.88
+        >>> precip = PrecipitationDistribution(mean_storm_duration=1.5,
+        ...     mean_interstorm_duration=15.0, mean_storm_depth=0.5,
+        ...     total_t=100.0, delta_t=1., random_seed=1)
+        >>> round(precip.storm_duration, 2) # diff't vals with diff't seed
+        0.22
+        >>> round(precip.interstorm_duration, 2)
+        28.2
+        >>> round(precip.storm_depth, 4)
+        0.0012
+        >>> round(precip.intensity, 4)
+        0.0054
+        """
+        random.seed(seedval)
+        np.random.seed(seedval)
 
     @property
     def elapsed_time(self):
-        """
-        Return the elapsed time recorded by the module.
+        """Get the elapsed time recorded by the module.
+
         This will be particularly useful in the midst of a yield loop.
         """
         return self._elapsed_time
+
+    @property
+    def intensity(self):
+        """Get the intensity of the most recent storm simulated.
+        """
+        return self.get_storm_intensity()

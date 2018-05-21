@@ -1,2 +1,5 @@
 
-import landlab.components.radiation.radiation_field
+from .radiation import Radiation
+
+
+__all__ = ['Radiation', ]

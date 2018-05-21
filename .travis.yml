@@ -1,47 +1,79 @@
 env:
   matrix:
-  - TRAVIS_PYTHON_VERSION="2.6" NUMPY_VERSION="1.9"
-  - TRAVIS_PYTHON_VERSION="2.7" NUMPY_VERSION="1.9"
-  - TRAVIS_PYTHON_VERSION="2.7" NUMPY_VERSION="1.10"
-  - TRAVIS_PYTHON_VERSION="3.3" NUMPY_VERSION="1.9"
-  - TRAVIS_PYTHON_VERSION="3.4" NUMPY_VERSION="1.9"
-  - TRAVIS_PYTHON_VERSION="3.4" NUMPY_VERSION="1.10"
+  - TRAVIS_PYTHON_VERSION="2.7" BUILD_DOCS=0 COVERALLS=1
+  - TRAVIS_PYTHON_VERSION="3.5" BUILD_DOCS=0 COVERALLS=0
+  - TRAVIS_PYTHON_VERSION="3.6" BUILD_DOCS=0 COVERALLS=0
   global:
-    secure: UxPkdFKl0xtk+H+98CNHSnYN8SJrEq5xJjLtPUPR+5UF5lLKL7godwrOdYeO0B0fXPi2Plw0vtoIID6H1AV4x+8QD/AgAizoWIh8KLim3E7rDX0v0M3WnUHctvYwt76mGCYvIGH6qR2Ziml37Ec6nz2aTuz0oex27P6dq0BKkXs=
+  - CONDA_PREFIX=$HOME/miniconda
+  - MINICONDA_URL_BASE="https://repo.continuum.io/miniconda/Miniconda3-latest"
+  - secure: wuv2O1M29pkfAjPbOK1MetIf3teDrG4VTepDOps2YFLMzcoJBlJeTqEneVcHb/q2dz5SefjxQQrbLjgZNOURiS1IT2z24srNDPbp8OAsv9nsqAGZO40eWecCRa+u+P+Wh0pZ8urz/ptTir0qFIQ/yz5hoEPx4ScktHkn23V+/fM=
+  - secure: v5tsP1Ji+Nrf+u6yEzDzSnADkFn8mAiMaHRyHG+4kFSaU1q5TthBoc6pdCHLG+fafkN5EGZD8B/sJlg1GgvKpsvs8MA+lxpKtLfABPf/bv3NntfvtoMEjJUqYxooYha8JDP9ODJh54zwbxPmtMRfevkOUYELQ9aFd8bWjsuOG9c=
 os:
 - linux
 - osx
-matrix:
-  allow_failures:
-  - os: osx
-    env: TRAVIS_PYTHON_VERSION="2.6" NUMPY_VERSION="1.9"
 sudo: false
+filter_secrets: false
+before_install:
+- |
+  if [[ $TRAVIS_OS_NAME == "osx" ]]; then
+    brew remove --force $(brew list)
+    brew cleanup -s
+    rm -rf $(brew --cache)
+  fi
 install:
-- echo "Build on $TRAVIS_OS_NAME for Python $TRAVIS_PYTHON_VERSION"
-- bash .ci/travis/install_python.sh
-- export PATH="$HOME/miniconda/bin:$PATH"
-- source activate test-env
+- echo "Build on $TRAVIS_OS_NAME for Python $TRAVIS_PYTHON_VERSION, $TRAVIS_TAG"
+- |
+  if [[ "$TRAVIS_TAG" == v* ]]; then
+    export BUILD_STR=""
+  else
+    export BUILD_STR="dev"
+  fi
+- |
+  if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    OS="MacOSX-x86_64"
+  else
+    OS="Linux-x86_64"
+  fi
+- curl $MINICONDA_URL_BASE-$OS.sh > $HOME/minconda.sh
+- bash $HOME/minconda.sh -b -p $CONDA_PREFIX
+- export PATH="$CONDA_PREFIX/bin:$PATH"
+- hash -r
+- conda config --set always_yes yes --set changeps1 no
+- conda create -n _testing python=$TRAVIS_PYTHON_VERSION
+- source activate _testing
+- conda install -q conda-build=3.0 anaconda-client coverage sphinx
+- conda install -q numpy=1.11
 - pip install coveralls
-- conda install numpy=$NUMPY_VERSION
-- conda install scipy
-- python setup.py install
+- conda info -a && conda list
 script:
-- (cd docs && make html 2> /dev/null)
-- bash .ci/travis/run_travis_test.sh
+- conda build -q .conda-recipe --old-build-string
+- |
+  if [[ "$BUILD_DOCS" == "1" && "$TRAVIS_OS_NAME" == "linux" ]]; then
+    conda install -q landlab --use-local -c $(dirname $(conda build --output ./.conda-recipe/ --old-build-string))
+    (cd docs && make html)
+  fi
+  # - bash .ci/travis/run_travis_test.sh
 virtualenv:
   system_site_packages: false
 after_success:
-  - bash .ci/travis/deploy_to_pypi.sh
-  - coveralls
-deploy:
-  provider: pypi
-  user: mcflugen
-  password:
-    secure: V15DceMv4DUmjgxToaxrP3KaQxsLbfrTkB1s6D8YNQZvYJiVvNlBpC1nF8yWbOt3IWJQSGjaQEnObd2ZhHe2Kq/H+QsEFyBKlYF7SNp35FyS5zLuf2qhnNhmzhqkspwBpiGe88c1PQPFzfqdIUQXp7ZAv6L8YRvNy2sbzvgxh6I=
-  on:
-    tags: true
-    repo: landlab/landlab
-  distributions: sdist bdist_wheel
+- |
+  if [[ "$TRAVIS_TAG" == v* ]]; then
+    LANDLAB_PACKAGE=$(conda build --output ./.conda-recipe --old-build-string)
+    anaconda -t $ANACONDA_TOKEN upload --force --user landlab --channel main $LANDLAB_PACKAGE
+    bash .ci/travis/deploy_to_pypi.sh
+    # bash .ci/travis/deploy_to_anaconda.sh
+  fi
+- if [[ "$COVERALLS" == "1" ]]; then coveralls; fi
+# deploy:
+#   provider: pypi
+#   user: mcflugen
+#   password:
+#     secure: V15DceMv4DUmjgxToaxrP3KaQxsLbfrTkB1s6D8YNQZvYJiVvNlBpC1nF8yWbOt3IWJQSGjaQEnObd2ZhHe2Kq/H+QsEFyBKlYF7SNp35FyS5zLuf2qhnNhmzhqkspwBpiGe88c1PQPFzfqdIUQXp7ZAv6L8YRvNy2sbzvgxh6I=
+#   on:
+#     tags: true
+#     branch: release
+#     repo: landlab/landlab
+#   distributions: sdist bdist_wheel
 notifications:
   slack:
     secure: gRKbqjPgp0ZcFtecHOwjLAFbzzBr2zyFrxk7OAS/cea/9U8bLQNA0jZs3ZHtAgR53gdnFlx/GI10d/KD9XMKU55gQkO4FSvfYMK7Xzs2tfnEa5flTqQKRfjB1oJ2fmb81yshUe+xKsXBoedP7SPYv2mutMOY8srKwUcuE0yGmAw=

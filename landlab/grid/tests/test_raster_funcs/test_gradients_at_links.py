@@ -37,11 +37,16 @@ def setup_non_square_grid():
 @with_setup(setup_unit_grid)
 def test_unit_spacing():
     """Test on a grid with unit spacing."""
-    grads = _GRID.calculate_gradients_at_links(_VALUES_AT_NODES)
+    grads = _GRID.calc_grad_at_link(_VALUES_AT_NODES)
     assert_array_equal(
         grads,
-        np.array([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        np.array([1, 1, 1, 1, 
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1,
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1,
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1],
                  dtype=float))
     diffs = _GRID.calculate_diff_at_links(_VALUES_AT_NODES)
     assert_array_equal(grads, diffs)
@@ -50,18 +55,27 @@ def test_unit_spacing():
 @with_setup(setup_non_square_grid)
 def test_non_unit_spacing():
     """Test on a grid with non-unit spacing."""
-    grads = _GRID.calculate_gradients_at_links(_VALUES_AT_NODES)
+    grads = _GRID.calc_grad_at_link(_VALUES_AT_NODES)
     assert_array_equal(
         grads,
         np.array(
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-             0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-             0.5, 0.5, 0.5],
+           [0.5, 0.5,  0.5,  0.5,
+            1.0, 1.0,  1. ,  1. ,  1. ,  
+            0.5,  0.5, 0.5,  0.5,
+            1. ,  1. , 1. ,  1. ,  1. ,
+            0.5,  0.5,  0.5,  0.5,
+            1. ,  1. ,  1. ,  1. , 1. ,
+            0.5,  0.5,  0.5,  0.5],
             dtype=float))
-    diffs = _GRID.calculate_diff_at_links(_VALUES_AT_NODES)
+    diffs = _GRID.calc_diff_at_link(_VALUES_AT_NODES)
     assert_array_equal(diffs,
-        np.array([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        np.array([1, 1, 1, 1,
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1,
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1,
+                  5, 5, 5, 5, 5,
+                  1, 1, 1, 1],
                  dtype=float))
 
 
@@ -69,11 +83,11 @@ def test_non_unit_spacing():
 def test_out_array():
     """Test using the out keyword."""
     grads = np.empty(31)
-    rtn_grads = _GRID.calculate_gradients_at_links(_VALUES_AT_NODES, out=grads)
+    rtn_grads = _GRID.calc_grad_at_link(_VALUES_AT_NODES, out=grads)
     assert_array_equal(
         grads,
-        np.array([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        np.array([1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 5,
+                  5, 5, 5, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1],
                  dtype=float))
     assert_is(rtn_grads, grads)
 
@@ -85,7 +99,7 @@ def test_diff_out_array():
     rtn_diff = _GRID.calculate_diff_at_links(_VALUES_AT_NODES, out=diff)
     assert_array_equal(
         diff,
-        np.array([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        np.array([1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1, 5, 5,
+                  5, 5, 5, 1, 1, 1, 1, 5, 5, 5, 5, 5, 1, 1, 1, 1],
                  dtype=float))
     assert_is(rtn_diff, diff)

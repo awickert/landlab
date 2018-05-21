@@ -1,22 +1,7 @@
-landlab.components.pet package
-==============================
-
-Submodules
-----------
-
-landlab.components.pet.potential_evapotranspiration_field module
-----------------------------------------------------------------
+PotentialEvapotranspiration: Compute potential evapotranspiration
+-----------------------------------------------------------------
 
 .. automodule:: landlab.components.pet.potential_evapotranspiration_field
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: landlab.components.pet
     :members:
     :undoc-members:
     :show-inheritance:

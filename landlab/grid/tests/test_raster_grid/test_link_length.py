@@ -1,6 +1,6 @@
 import numpy as np
-from numpy.testing import assert_array_equal
-from nose.tools import with_setup
+from numpy.testing import assert_array_equal, assert_array_almost_equal
+from nose.tools import with_setup, assert_is
 
 from landlab import RasterModelGrid
 
@@ -19,23 +19,38 @@ def setup_grid():
 
 @with_setup(setup_unit_grid)
 def test_unit_spacing():
-    lengths = _RMG._calculate_link_length()
-    assert_array_equal(lengths, np.ones(31))
+    assert_array_equal(_RMG.length_of_link, np.ones(31))
 
 
 @with_setup(setup_grid)
 def test_non_unit_spacing():
-    assert_array_equal(_RMG._calculate_link_length(),
-                       [3.] * 15 + [4.] * 16)
+    assert_array_equal(_RMG.length_of_link,
+                       [4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.])
 
 
 @with_setup(setup_grid)
 def test_link_length():
-    assert_array_equal(_RMG.link_length,
-                       [3.] * 15 + [4.] * 16)
+    assert_array_equal(_RMG.length_of_link,
+                       [4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3., 3., 3.,
+                        4., 4., 4., 4.])
 
 
 @with_setup(setup_grid)
 def test_active_link_length():
-    assert_array_equal(_RMG.active_link_length,
-                       [3.] * 9  + [4.] * 8 )
+    assert_array_equal(_RMG.length_of_link[_RMG.active_links],
+                       [3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3.,
+                        4., 4., 4., 4.,
+                        3., 3., 3.])

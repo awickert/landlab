@@ -26,8 +26,8 @@ init_elev = inputs.read_float('init_elev')
 mg = RasterModelGrid(nrows, ncols, dx)
 
 #create the fields in the grid
-mg.create_node_array_zeros('topographic__elevation')
-z = mg.create_node_array_zeros() + init_elev
+mg.add_zeros('topographic__elevation', at='node')
+z = mg.zeros(at='node') + init_elev
 mg['node'][ 'topographic__elevation'] = z + np.random.rand(len(z))/1000.
 
 #make some surface load stresses in a field to test
@@ -52,4 +52,4 @@ pylab.figure(1)
 im = imshow_node_grid(mg, 'topographic__elevation')  # display a colored image
 
 pylab.figure(2)
-im = imshow_node_grid(mg, 'lithosphere__vertical_displacement')
+im = imshow_node_grid(mg, 'lithosphere_surface__elevation_increment')

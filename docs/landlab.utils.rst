@@ -1,13 +1,6 @@
 landlab.utils package
 =====================
 
-Subpackages
------------
-
-.. toctree::
-
-    landlab.utils.tests
-
 Submodules
 ----------
 
@@ -55,6 +48,14 @@ landlab.utils.structured_grid module
 ------------------------------------
 
 .. automodule:: landlab.utils.structured_grid
+    :members:
+    :undoc-members:
+    :show-inheritance:
+ 
+landlab.utils.source_tracking_algorithm module
+-----------------------------------------------
+
+.. automodule:: landlab.utils.source_tracking_algorithm
     :members:
     :undoc-members:
     :show-inheritance:

@@ -25,7 +25,7 @@ import scipy.constants
 from landlab import Component, FieldError, RasterModelGrid
 
 try:
-    import gflex
+    from gflex.f2d import F2D
 except ImportError:
     NO_GFLEX = True
 else:
@@ -202,7 +202,7 @@ class gFlex(Component):
         )
 
         # instantiate the module:
-        self._flex = gflex.F2D()
+        self._flex = F2D()
         flex = self._flex
 
         # set up the grid variables:
